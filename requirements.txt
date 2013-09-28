@@ -1,0 +1,5 @@
+gevent >= 0.13.8
+greenlet >= 0.4.1
+requesocks >= 0.10.8
+stem >= 1.0.1
+psutil >= 1.0.1

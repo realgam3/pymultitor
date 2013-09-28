@@ -1,0 +1,4 @@
+TODO:
+	1) TorConnections as Threads - For Faster Initialize.
+	2) Create Semaphores / Locks - For TorConnections Threads.
+	3) Make MAX_REQUEST_THREADS - For Faster Fequests.

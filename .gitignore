@@ -1,0 +1,39 @@
+#OS junk Files
+[Tt]humbs.db
+*.DS_Store
+desktop.ini
+
+# Python Files
+*.py[cod]
+torData
+TorCtl
+
+# C Extensions
+*.so
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+bin
+var
+sdist
+develop-eggs
+.installed.cfg
+lib
+lib64
+__pycache__
+
+# Installer Logs
+pip-log.txt
+
+# Translations
+*.mo
+
+# Developer
+.project
+.pydevproject
+.idea
