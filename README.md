@@ -15,7 +15,7 @@ Requirements:
 
 ###MacOSx Installation:
 1. Install Xcode Command Line Tools (AppStore)
-2. `ruby -e $(curl -fsSL "https://raw.github.com/mxcl/homebrew/go")`
+2. `ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go)"`
 3. brew install openssl tor
 4. sudo easy_install pip
 5. sudo pip install -r requirements.txt
