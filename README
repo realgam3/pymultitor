@@ -1,3 +1,12 @@
+Project Description:
+	With this algorithm you can use multiple tor threads to make multiple requests with multiple IP addresses,
+	This POC shows IP addresses that checked by dyndns service and change the IP every cycle.
+	By changing the pool_function, main functions you can use this project as you desire.
+	
+Project Purpose:
+	This project purpose is to show the world that ip block is not enough.
+	Example from my old PyMultitor version: http://www.youtube.com/watch?v=35y2FQn9k0Q
+
 Requirements:
 	Linux Installation:
 		1) sudo apt-get install python-dev python-pip libevent-dev openssl tor
