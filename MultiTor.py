@@ -17,7 +17,7 @@ from time import time as now
 from requesocks import request
 from stem.process import launch_tor_with_config
 from stem.control import Controller
-from stem import Signal, util
+from stem import Signal
 from zipfile import ZipFile
 from psutil import process_iter
 from subprocess import check_output
