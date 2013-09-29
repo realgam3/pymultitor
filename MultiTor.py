@@ -35,6 +35,7 @@ class TorConnection(object):
         self.__torCtrl = None
         self.__proxies = None
         self.__lastTimeIpChanged = 0
+
         #Call Creator
         self.__start()
 
@@ -99,6 +100,7 @@ class TorConnection(object):
     def reset(self):
         #Kill All
         self.kill()
+
         #Start All
         self.__open()
 
@@ -109,6 +111,7 @@ class TorConnection(object):
         #Tor Need 10 Seconds(TOR_TIMEOUT) Difference Between Id Changes
         if (now() - self.__lastTimeIpChanged) >= TOR_TIMEOUT:
             print "%s\t->\t%d) ChangeIP (%s)" % (self.getId(), i, msg)
+
             #Check If TimedOut
             timedOut = True
             with Timeout(TOR_TIMEOUT, False):
@@ -116,6 +119,7 @@ class TorConnection(object):
                 timedOut = False
             if timedOut:
                 self.reset()
+
             self.__lastTimeIpChanged = now()
             return True
         return False
@@ -127,8 +131,10 @@ class TorConnection(object):
         return self.__proxies
 
 
-#TorConnectionCollector - Sends Free TorConnection To The Thread Function
 class TorConnectionCollector(object):
+    """
+    TorConnectionCollector - Sends Free TorConnection To The Thread Function
+    """
     def __init__(self):
         self.__torCons = []
         for i in xrange(MAX_NUM_OF_THREADS):
@@ -147,7 +153,7 @@ class TorConnectionCollector(object):
 
 
 def pool_function(torRange):
-    #Important Variables
+    #Important variables
     torConn = torConnColl.getFreeConnection()
     proxies = torConn.getProxies()
     torId = torConn.getId()
@@ -155,7 +161,8 @@ def pool_function(torRange):
 
     print "%s\t->\tStart (%d - %d)" % (torId, torRange[0], torRange[-1])
     i = 0
-    #I Use While Because For Cant Move Backwards
+
+    #Using a while loop - cant move backwards
     while i < size:
         try:
             #Send Request
@@ -173,6 +180,7 @@ def pool_function(torRange):
             while not ipChanged:
                 ipChanged = torConn.changeIp(torRange[i], ex)
             continue
+
         #Print Result
         print "%s\t->\t%d) %s" % (torId, torRange[i], "".join(findall(r"[0-9]+(?:\.[0-9]+){3}", res)))
         i += 1
@@ -191,22 +199,28 @@ def main():
     for process in process_iter():
         if path.basename(TOR_CMD) == process.name:
             process.terminate()
+
     #Extract Tor Windows Files If Needed
     if isWindows() and not path.exists(TOR_ROOT_DATA_PATH):
         makedirs(TOR_ROOT_DATA_PATH)
         ZipFile(path.join(getcwd(), "torWin.data")).extractall(TOR_ROOT_DATA_PATH)
+
     #Create TorConnectionCollector And Tor PassPhrase Hash
     global torConnColl, passPhraseHash
     passPhraseHash = check_output([TOR_CMD, "--hash-password", PASS_PHRASE]).strip().split("\n")[-1]
     torConnColl = TorConnectionCollector()
+
     #Create The Threads Pool
     for i in xrange(START, END, INC):
         POOL.spawn(pool_function, range(i, i + INC))
+
     #Block Until Pool Done
     POOL.join()
+
     #Kill All TorConnections
     print "Kill Tor Connections"
     torConnColl.killConnections()
+
     #Finish
     print "Finished Scanning"
 
