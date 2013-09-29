@@ -153,7 +153,7 @@ class TorConnectionCollector(object):
 
 
 def pool_function(torRange):
-    #Important variables
+    #Important Variables
     torConn = torConnColl.getFreeConnection()
     proxies = torConn.getProxies()
     torId = torConn.getId()
@@ -162,7 +162,7 @@ def pool_function(torRange):
     print "%s\t->\tStart (%d - %d)" % (torId, torRange[0], torRange[-1])
     i = 0
 
-    #Using a while loop - cant move backwards
+    #Using A While Loop - For Loop Cant Move Backwards
     while i < size:
         try:
             #Send Request
