@@ -17,10 +17,12 @@ from time import time as now
 from requesocks import request
 from stem.process import launch_tor_with_config
 from stem.control import Controller
-from stem import Signal
+from stem import Signal, util
 from zipfile import ZipFile
 from psutil import process_iter
 from subprocess import check_output
+import logging
+import atexit
 
 
 #TorConnection - Contains Controller And Subprocess
@@ -41,7 +43,7 @@ class TorConnection(object):
 
     def __torPrint(self, line):
         if "Bootstrapped" in line:
-            print "%s\t->\t%s" % (self.getId(), line)
+            logger.info("%s\t->\t%s" % (self.getId(), line))
 
     def __open(self):
         #Open Tor Process
@@ -84,7 +86,7 @@ class TorConnection(object):
         self.__isFree = True
 
         #Up And Running Message
-        print "%s\t->\tUp & Running!" % self.getId()
+        logger.info("%s\t->\tUp & Running!" % self.getId())
 
     def changeState(self):
         self.__isFree = not self.__isFree
@@ -105,12 +107,12 @@ class TorConnection(object):
         self.__open()
 
         #Inform
-        print "%s\t->\tUp & Running After Reset!" % self.getId()
+        logger.info("%s\t->\tUp & Running After Reset!" % self.getId())
         
     def changeIp(self, i, msg):
         #Tor Need 10 Seconds(TOR_TIMEOUT) Difference Between Id Changes
         if (now() - self.__lastTimeIpChanged) >= TOR_TIMEOUT:
-            print "%s\t->\t%d) ChangeIP (%s)" % (self.getId(), i, msg)
+            logger.info("%s\t->\t%d) ChangeIP (%s)" % (self.getId(), i, msg))
 
             #Check If TimedOut
             timedOut = True
@@ -125,7 +127,7 @@ class TorConnection(object):
         return False
 
     def getId(self):
-        return "Tor_%d" % self.__socksPort
+        return "Tor[%d]" % self.__socksPort
 
     def getProxies(self):
         return self.__proxies
@@ -148,6 +150,8 @@ class TorConnectionCollector(object):
                     return conn
 
     def killConnections(self):
+        print "Killing tor!"
+        logger.info("Killing all tor clients")
         for conn in self.__torCons:
             conn.kill()
 
@@ -159,7 +163,7 @@ def pool_function(torRange):
     torId = torConn.getId()
     size = len(torRange)
 
-    print "%s\t->\tStart (%d - %d)" % (torId, torRange[0], torRange[-1])
+    logger.info("%s\t->\tStart (%d - %d)" % (torId, torRange[0], torRange[-1]))
     i = 0
 
     #Using a while loop - cant move backwards
@@ -182,7 +186,7 @@ def pool_function(torRange):
             continue
 
         #Print Result
-        print "%s\t->\t%d) %s" % (torId, torRange[i], "".join(findall(r"[0-9]+(?:\.[0-9]+){3}", res)))
+        logger.debug("%s\t->\t(req %d) %s" % (torId, torRange[i], "".join(findall(r"[0-9]+(?:\.[0-9]+){3}", res))))
         i += 1
         
     #Change IP
@@ -194,35 +198,73 @@ def pool_function(torRange):
     torConn.changeState()
 
 
+def start_logging():
+    global logger
+    logger = logging.getLogger('screenLogger')
+    logger.setLevel(logging.DEBUG)
+
+    #create console handler and set level to debug
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    # create formatter
+    formatter = logging.Formatter('%(asctime)s:%(levelname)s - %(message)s')
+
+    # add formatter
+    ch.setFormatter(formatter)
+
+
+    # add entities to logger
+    logger.addHandler(ch)
+
+
 def main():
-    #Kill All Tor Processes
-    for process in process_iter():
-        if path.basename(TOR_CMD) == process.name:
-            process.terminate()
+    try:
+        #Start logger
+        start_logging()
 
-    #Extract Tor Windows Files If Needed
-    if isWindows() and not path.exists(TOR_ROOT_DATA_PATH):
-        makedirs(TOR_ROOT_DATA_PATH)
-        ZipFile(path.join(getcwd(), "torWin.data")).extractall(TOR_ROOT_DATA_PATH)
+        #initiate on exit function
+        atexit.register(exit_function)
 
-    #Create TorConnectionCollector And Tor PassPhrase Hash
-    global torConnColl, passPhraseHash
-    passPhraseHash = check_output([TOR_CMD, "--hash-password", PASS_PHRASE]).strip().split("\n")[-1]
-    torConnColl = TorConnectionCollector()
+        #Startup print
+        logger.info("Starting PyMultiTor with %s Threads..." % MAX_NUM_OF_THREADS)
 
-    #Create The Threads Pool
-    for i in xrange(START, END, INC):
-        POOL.spawn(pool_function, range(i, i + INC))
+        #Kill All Tor Processes
+        for process in process_iter():
+            if path.basename(TOR_CMD) == process.name:
+                process.terminate()
 
-    #Block Until Pool Done
-    POOL.join()
+        #Extract Tor Windows Files If Needed
+        if isWindows() and not path.exists(TOR_ROOT_DATA_PATH):
+            makedirs(TOR_ROOT_DATA_PATH)
+            ZipFile(path.join(getcwd(), "torWin.data")).extractall(TOR_ROOT_DATA_PATH)
 
-    #Kill All TorConnections
-    print "Kill Tor Connections"
-    torConnColl.killConnections()
+        #Create TorConnectionCollector And Tor PassPhrase Hash
+        global torConnColl, passPhraseHash
+        passPhraseHash = check_output([TOR_CMD, "--hash-password", PASS_PHRASE]).strip().split("\n")[-1]
+        torConnColl = TorConnectionCollector()
 
-    #Finish
-    print "Finished Scanning"
+        #Create The Threads Pool
+        for i in xrange(START, END, INC):
+            POOL.spawn(pool_function, range(i, i + INC))
+
+        #Block Until Pool Done
+        POOL.join()
+
+        #Kill All TorConnections
+        logger.info("Kill Tor Connections")
+        torConnColl.killConnections()
+
+        #Finish
+        logger.info("Finished Scanning")
+    except:
+        pass
+
+
+def exit_function():
+    print "\nPerforming clean exit... shutting down tor clients..."
+    print "Thank you for using PyMultiTor - https://github.com/realgam3/pymultitor"
 
 if __name__ == "__main__":
     main()
+
