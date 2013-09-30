@@ -21,10 +21,13 @@ from stem import Signal
 from zipfile import ZipFile
 from psutil import process_iter
 from subprocess import check_output
+from atexit import register as when_interrupted
 
 
-#TorConnection - Contains Controller And Subprocess
 class TorConnection(object):
+    """
+    TorConnection - Contains Controller And Subprocess
+    """
     def __init__(self, socksPort, ctrlPort):
         #Variables
         self.__isFree = False
@@ -152,7 +155,27 @@ class TorConnectionCollector(object):
             conn.kill()
 
 
+def kill_tor_processes():
+    """
+    Kill All Tor Processes
+    """
+    for process in process_iter():
+        if path.basename(TOR_CMD) == process.name:
+            process.terminate()
+
+
+def interrupted_exit():
+    #Try To Exit The Right Way
+    try:
+        torConnColl.killConnections()
+    except:
+        kill_tor_processes()
+
+
 def pool_function(torRange):
+    """
+    pool_function - Main Thread Function
+    """
     #Important Variables
     torConn = torConnColl.getFreeConnection()
     proxies = torConn.getProxies()
@@ -195,34 +218,41 @@ def pool_function(torRange):
 
 
 def main():
-    #Kill All Tor Processes
-    for process in process_iter():
-        if path.basename(TOR_CMD) == process.name:
-            process.terminate()
+    #Force To Kill All Tor Processes
+    kill_tor_processes()
 
     #Extract Tor Windows Files If Needed
     if isWindows() and not path.exists(TOR_ROOT_DATA_PATH):
         makedirs(TOR_ROOT_DATA_PATH)
         ZipFile(path.join(getcwd(), "torWin.data")).extractall(TOR_ROOT_DATA_PATH)
 
-    #Create TorConnectionCollector And Tor PassPhrase Hash
-    global torConnColl, passPhraseHash
-    passPhraseHash = check_output([TOR_CMD, "--hash-password", PASS_PHRASE]).strip().split("\n")[-1]
-    torConnColl = TorConnectionCollector()
+    #When Interrupted
+    when_interrupted(interrupted_exit)
 
-    #Create The Threads Pool
-    for i in xrange(START, END, INC):
-        POOL.spawn(pool_function, range(i, i + INC))
+    try:
+        #Create TorConnectionCollector And Tor PassPhrase Hash
+        global torConnColl, passPhraseHash
+        passPhraseHash = check_output([TOR_CMD, "--hash-password", PASS_PHRASE]).strip().split("\n")[-1]
+        torConnColl = TorConnectionCollector()
 
-    #Block Until Pool Done
-    POOL.join()
+        #Create The Threads Pool
+        for i in xrange(START, END, INC):
+            POOL.spawn(pool_function, range(i, i + INC))
+
+        #Block Until Pool Done
+        POOL.join()
+    except Exception as ex:
+        #Finish
+        print "Interrupted (%s)" %ex
+        # 2 = SIGINT (Let The You Know In stderr It Interrupted)
+        exit(2)
 
     #Kill All TorConnections
     print "Kill Tor Connections"
     torConnColl.killConnections()
 
     #Finish
-    print "Finished Scanning"
+    print "Finished"
 
 if __name__ == "__main__":
     main()
