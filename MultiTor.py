@@ -226,7 +226,7 @@ def main():
         makedirs(TOR_ROOT_DATA_PATH)
         ZipFile(path.join(getcwd(), "torWin.data")).extractall(TOR_ROOT_DATA_PATH)
 
-    #When Interrupted
+    #When Interrupted Event
     when_interrupted(interrupted_exit)
 
     try:
@@ -244,7 +244,7 @@ def main():
     except Exception as ex:
         #Finish
         print "Interrupted (%s)" %ex
-        # 2 = SIGINT (Let The You Know In stderr It Interrupted)
+        # 2 = SIGINT (Let You Know(In stderr) If It Interrupted)
         exit(2)
 
     #Kill All TorConnections
