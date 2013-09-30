@@ -243,7 +243,7 @@ def main():
         POOL.join()
     except Exception as ex:
         #Finish
-        print "Interrupted (%s)" %ex
+        print "Interrupted"
         # 2 = SIGINT (Let You Know(In stderr) If It Interrupted)
         exit(2)
 
