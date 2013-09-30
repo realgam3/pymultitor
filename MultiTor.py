@@ -241,7 +241,7 @@ def main():
 
         #Block Until Pool Done
         POOL.join()
-    except Exception as ex:
+    except:
         #Finish
         print "Interrupted"
         # 2 = SIGINT (Let You Know(In stderr) If It Interrupted)
