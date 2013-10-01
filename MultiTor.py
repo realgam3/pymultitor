@@ -19,7 +19,7 @@ from stem.process import launch_tor_with_config
 from stem.control import Controller
 from stem import Signal
 from zipfile import ZipFile
-from psutil import process_iter
+from psutil import process_iter, AccessDenied
 from subprocess import check_output
 from atexit import register as when_interrupted
 
@@ -160,8 +160,11 @@ def kill_tor_processes():
     Kill All Tor Processes
     """
     for process in process_iter():
-        if path.basename(TOR_CMD) == process.name:
-            process.terminate()
+        try:
+            if path.basename(TOR_CMD) == process.name:
+                process.terminate()
+        except AccessDenied:
+            continue
 
 
 def interrupted_exit():
