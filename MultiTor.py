@@ -10,6 +10,7 @@ from gevent.monkey import patch_all
 patch_all()
 
 from TorConfig import *
+from gevent.pool import Pool
 from gevent import Timeout
 from re import findall
 from os import makedirs
@@ -240,12 +241,14 @@ def main():
         torConnColl = TorConnectionCollector()
 
         #Create The Threads Pool
+        torPool = Pool(size=torCfg.MAX_NUM_OF_THREADS)
         for i in xrange(torCfg.START, torCfg.END, torCfg.INC):
-            torCfg.POOL.spawn(pool_function, range(i, i + torCfg.INC))
+            torPool.spawn(pool_function, range(i, i + torCfg.INC))
 
         #Block Until Pool Done
-        torCfg.POOL.join()
+        torPool.join()
     except:
+        from signal import SIGINT
         #Finish
         print "Interrupted"
         exit(SIGINT)

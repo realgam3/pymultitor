@@ -5,12 +5,10 @@ __version__ = '1.0.0'
 __email__ = 'realgam3@gmail.com'
 ########################################################
 
-from gevent.pool import Pool
 from os import getcwd, path
 from sys import platform
 from requesocks.defaults import defaults
 from ConfigParser import ConfigParser
-from signal import SIGINT
 
 
 def isWindows():
@@ -68,7 +66,6 @@ class BasicConfiguration(object):
         self.START = torCfg.getint("parameters", "START")
         self.END = torCfg.getint("parameters", "END")
         self.INC = torCfg.getint("parameters", "INC")
-        self.POOL = Pool(size=self.MAX_NUM_OF_THREADS)
 
         # Change Requesocks Default Configurations
         defaults['pool_connections'] = self.MAX_NUM_OF_THREADS
