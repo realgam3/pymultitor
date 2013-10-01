@@ -19,7 +19,7 @@ from stem.process import launch_tor_with_config
 from stem.control import Controller
 from stem import Signal
 from zipfile import ZipFile
-from psutil import process_iter
+from psutil import process_iter, AccessDenied
 from subprocess import check_output
 
 
@@ -197,8 +197,11 @@ def pool_function(torRange):
 def main():
     #Kill All Tor Processes
     for process in process_iter():
-        if path.basename(TOR_CMD) == process.name:
-            process.terminate()
+        try:
+            if path.basename(TOR_CMD) == process.name:
+                process.terminate()
+        except AccessDenied:
+            continue
 
     #Extract Tor Windows Files If Needed
     if isWindows() and not path.exists(TOR_ROOT_DATA_PATH):
