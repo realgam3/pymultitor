@@ -50,9 +50,9 @@ class TorConnection(object):
         #Open Tor Process
         opened = False
         while not opened:
-            with Timeout(PROCESS_TIMEOUT, False):
+            with Timeout(torCfg.PROCESS_TIMEOUT, False):
                 self.__torProcess = launch_tor_with_config(config=self.__torConfig,
-                                                           tor_cmd=TOR_CMD,
+                                                           tor_cmd=torCfg.TOR_CMD,
                                                            init_msg_handler=self.__torPrint)
                 self.__torProcess.stdout.close()
                 opened = True
@@ -60,12 +60,12 @@ class TorConnection(object):
                 self.__torProcess.terminate()
         
         #Open Tor Control
-        self.__torCtrl = Controller.from_port(address=HOST, port=self.__ctrlPort)
-        self.__torCtrl.authenticate(PASS_PHRASE)
+        self.__torCtrl = Controller.from_port(address=torCfg.HOST, port=self.__ctrlPort)
+        self.__torCtrl.authenticate(torCfg.PASS_PHRASE)
     
     def __start(self):
         #Data Paths
-        dataPath = path.join(TOR_ROOT_DATA_PATH, "data_%d" % self.__socksPort)
+        dataPath = path.join(torCfg.TOR_ROOT_DATA_PATH, "data_%d" % self.__socksPort)
         if not path.exists(dataPath):
             makedirs(dataPath)
         
@@ -80,8 +80,8 @@ class TorConnection(object):
         self.__open()
         
         #Create Proxy String
-        self.__proxies = {"http": "socks5://%s:%d" % (HOST, self.__socksPort),
-                          "https": "socks5://%s:%d" % (HOST, self.__socksPort)}
+        self.__proxies = {"http": "socks5://%s:%d" % (torCfg.HOST, self.__socksPort),
+                          "https": "socks5://%s:%d" % (torCfg.HOST, self.__socksPort)}
 
         #The Tor Connection Is Now Ready To Use
         self.__isFree = True
@@ -96,7 +96,7 @@ class TorConnection(object):
         return self.__isFree
 
     def kill(self):
-        with Timeout(TOR_TIMEOUT, False):
+        with Timeout(torCfg.TOR_TIMEOUT, False):
             self.__torCtrl.close()
         self.__torProcess.terminate()
 
@@ -112,12 +112,12 @@ class TorConnection(object):
         
     def changeIp(self, i, msg):
         #Tor Need 10 Seconds(TOR_TIMEOUT) Difference Between Id Changes
-        if (now() - self.__lastTimeIpChanged) >= TOR_TIMEOUT:
+        if (now() - self.__lastTimeIpChanged) >= torCfg.TOR_TIMEOUT:
             print "%s\t->\t%d) ChangeIP (%s)" % (self.getId(), i, msg)
 
             #Check If TimedOut
             timedOut = True
-            with Timeout(TOR_TIMEOUT, False):
+            with Timeout(torCfg.TOR_TIMEOUT, False):
                 self.__torCtrl.signal(Signal.NEWNYM)
                 timedOut = False
             if timedOut:
@@ -140,8 +140,8 @@ class TorConnectionCollector(object):
     """
     def __init__(self):
         self.__torCons = []
-        for i in xrange(MAX_NUM_OF_THREADS):
-            self.__torCons.append(TorConnection(SOCKS_START_PORT + i, CONTROL_START_PORT + i))
+        for i in xrange(torCfg.MAX_NUM_OF_THREADS):
+            self.__torCons.append(TorConnection(torCfg.SOCKS_START_PORT + i, torCfg.CONTROL_START_PORT + i))
 
     def getFreeConnection(self):
         while True:
@@ -161,7 +161,7 @@ def kill_tor_processes():
     """
     for process in process_iter():
         try:
-            if path.basename(TOR_CMD) == process.name:
+            if path.basename(torCfg.TOR_CMD) == process.name:
                 process.terminate()
         except AccessDenied:
             continue
@@ -194,8 +194,8 @@ def pool_function(torRange):
             #Send Request
             req = request(method="GET",
                           url="http://checkip.dyndns.org/",
-                          timeout=REQUEST_TIMEOUT,
-                          headers=HEADERS,
+                          timeout=torCfg.REQUEST_TIMEOUT,
+                          headers=torCfg.HEADERS,
                           proxies=proxies)
             res = req.text
             if res == "":
@@ -221,34 +221,34 @@ def pool_function(torRange):
 
 
 def main():
+    global torCfg, torConnColl, passPhraseHash
+    torCfg = BasicConfiguration()
     #Force To Kill All Tor Processes
     kill_tor_processes()
 
     #Extract Tor Windows Files If Needed
-    if isWindows() and not path.exists(TOR_ROOT_DATA_PATH):
-        makedirs(TOR_ROOT_DATA_PATH)
-        ZipFile(path.join(getcwd(), "torWin.data")).extractall(TOR_ROOT_DATA_PATH)
+    if isWindows() and not path.exists(torCfg.TOR_ROOT_DATA_PATH):
+        makedirs(torCfg.TOR_ROOT_DATA_PATH)
+        ZipFile(path.join(getcwd(), "torWin.data")).extractall(torCfg.TOR_ROOT_DATA_PATH)
 
     #When Interrupted Event
     when_interrupted(interrupted_exit)
 
     try:
         #Create TorConnectionCollector And Tor PassPhrase Hash
-        global torConnColl, passPhraseHash
-        passPhraseHash = check_output([TOR_CMD, "--hash-password", PASS_PHRASE]).strip().split("\n")[-1]
+        passPhraseHash = check_output([torCfg.TOR_CMD, "--hash-password", torCfg.PASS_PHRASE]).strip().split("\n")[-1]
         torConnColl = TorConnectionCollector()
 
         #Create The Threads Pool
-        for i in xrange(START, END, INC):
-            POOL.spawn(pool_function, range(i, i + INC))
+        for i in xrange(torCfg.START, torCfg.END, torCfg.INC):
+            torCfg.POOL.spawn(pool_function, range(i, i + torCfg.INC))
 
         #Block Until Pool Done
-        POOL.join()
+        torCfg.POOL.join()
     except:
         #Finish
         print "Interrupted"
-        # 2 = SIGINT (Let You Know(In stderr) If It Interrupted)
-        exit(2)
+        exit(SIGINT)
 
     #Kill All TorConnections
     print "Kill Tor Connections"
