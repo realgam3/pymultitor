@@ -160,9 +160,10 @@ def kill_tor_processes():
     """
     Kill All Tor Processes
     """
+    base_name = path.basename(torCfg.TOR_CMD)
     for process in process_iter():
         try:
-            if path.basename(torCfg.TOR_CMD) == process.name:
+            if base_name == process.name:
                 process.terminate()
         except AccessDenied:
             continue
