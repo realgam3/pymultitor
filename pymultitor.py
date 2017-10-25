@@ -12,7 +12,6 @@ import itertools
 from os import path
 from shutil import rmtree
 from tempfile import mkdtemp
-from argparse import ArgumentParser
 from multiprocessing.pool import ThreadPool
 from stem.control import Controller, Signal
 from requests.exceptions import ConnectionError
@@ -20,6 +19,7 @@ from stem.process import launch_tor_with_config
 from mitmproxy.proxy import ProxyServer, ProxyConfig
 from mitmproxy.options import Options as ProxyOptions
 from mitmproxy.controller import handler as proxy_handler
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 # If mitmproxy > 0.18.3
 websocket_key = 'websocket'
@@ -99,6 +99,7 @@ class Tor(object):
 
     def newnym(self):
         if not self.newnym_available():
+            self.logger.warning("[%05d] Cant Change Tor Identity (Need More Tor Processes)" % self.id)
             return False
 
         self.logger.debug("[%05d] Changing Tor Identity" % self.id)
@@ -155,9 +156,9 @@ class MultiTor(object):
         return {'http': proxy_url, 'https': proxy_url}
 
     def new_identity(self):
-        if self.current.newnym_available():
-            self.current.newnym()
+        self.current.newnym()
         self.current = next(self.cycle)
+
         return self.proxy
 
     def shutdown(self):
@@ -182,7 +183,7 @@ class MultiTorProxy(Master):
             # For Python 3
             self.on_string = str.encode(on_string)
 
-        self.on_callback = lambda r: None
+        self.on_callback = None
         if callable(on_callback):
             self.on_callback = on_callback
 
@@ -227,6 +228,7 @@ class MultiTorProxy(Master):
             verify=not self.insecure,
             proxies=self.multitor.proxy
         )
+
         response_headers = dict(response.headers)
         if not new_mitmproxy:
             response_headers = response.headers.items()
@@ -239,9 +241,10 @@ class MultiTorProxy(Master):
 
     @proxy_handler
     def request(self, flow):
+        error = None
         try:
             flow.response = self.create_response(flow.request)
-        except ConnectionError as ce:
+        except ConnectionError as error:
             # If TCP Rst Configured
             if self.on_rst:
                 self.logger.debug("Got TCP Rst, While TCP Rst Configured")
@@ -249,9 +252,9 @@ class MultiTorProxy(Master):
                 # Set Response
                 flow.response = self.create_response(flow.request)
             else:
-                # ReRaise Exception
                 self.logger.error("Got TCP Rst, While TCP Rst Not Configured")
-                raise ce
+        except Exception as error:
+            self.logger.error("Got Unknown Error %s" % error)
 
         # If String Found On Response Content
         if self.on_string and self.on_string in flow.response.content:
@@ -267,11 +270,17 @@ class MultiTorProxy(Master):
             # Set Response
             flow.response = self.create_response(flow.request)
 
-        # If Counter Raised To The Configured
-        if 0 < self.on_count <= next(self.counter):
+        # If Counter Raised To The Configured Number
+        if 0 < next(self.counter) >= self.on_count:
             self.logger.debug("Counter Raised To The Configured Number")
             self.counter = itertools.count(1)
             self.multitor.new_identity()
+            # Set Response
+            flow.response = self.create_response(flow.request)
+
+        # CallBack (For Developers)
+        if self.on_callback:
+            self.on_callback(self, flow, error)
             # Set Response
             flow.response = self.create_response(flow.request)
 
@@ -299,7 +308,7 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
 
-    parser = ArgumentParser()
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("-v", "--version", action="version", version="%(prog)s {ver}".format(ver=__version__))
 
     # Proxy Configuration
@@ -354,6 +363,7 @@ def main(args=None):
     logging.basicConfig(level=logging.DEBUG if sys_args.pop('debug') else logging.INFO,
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%d-%m-%y %H:%M:%S')
+
     # Disable Other Loggers
     logging.getLogger("stem").disabled = True
     logging.getLogger("requests.packages.urllib3.connectionpool").disabled = True
