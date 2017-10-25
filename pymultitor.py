@@ -68,7 +68,9 @@ class Tor(object):
             config={
                 "ControlPort": str(self.control_port),
                 "SOCKSPort": str(self.socks_port),
-                "DataDirectory": self.data_directory
+                "DataDirectory": self.data_directory,
+                "AllowSingleHopCircuits": "1",
+                "ExcludeSingleHopRelays": "0",
             },
             tor_cmd=self.tor_cmd,
             init_msg_handler=self.print_bootstrapped_line
@@ -275,14 +277,10 @@ class MultiTorProxy(Master):
             self.logger.debug("Counter Raised To The Configured Number")
             self.counter = itertools.count(1)
             self.multitor.new_identity()
-            # Set Response
-            flow.response = self.create_response(flow.request)
 
         # CallBack (For Developers)
         if self.on_callback:
             self.on_callback(self, flow, error)
-            # Set Response
-            flow.response = self.create_response(flow.request)
 
 
 def run(listen_host="", listen_port=8080, socks=False, insecure=False,
