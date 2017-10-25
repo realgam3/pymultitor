@@ -17,21 +17,21 @@ With a large number of IP addresses performing the attacks, better results are g
 
 * Python 2.7+.
 * A C compiler, Python headers, etc. (are needed to compile several dependencies).
-  * On Ubuntu, `sudo apt-get install -y build-essential libssl-dev python-setuptools python-pip python-wheel python-dev`
+  * On Ubuntu / Kali, `sudo apt-get install -y build-essential libssl-dev python-setuptools python-pip python-wheel python-dev`
   * On Fedora, `sudo dnf install -y redhat-rpm-config gcc gcc-c++ make openssl-devel python-setuptools python-pip python-wheel python-devel`
   * On Windows, install http://aka.ms/vcpython27
   * On MacOS,
     * install xcode command line tools: `xcode-select --install`
     * install homebrew(brew): `$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"`
 * mitmproxy dependencies.
-  * On Ubuntu, `sudo apt-get install -y libffi-dev libssl-dev libxml2-dev libxslt1-dev libjpeg8-dev zlib1g-dev`
+  * On Ubuntu / Kali, `sudo apt-get install -y libffi-dev libssl-dev libxml2-dev libxslt1-dev libjpeg-dev zlib1g-dev`
   * On Fedora, `sudo dnf install -y libffi-devel openssl-devel libxml2-devel libxslt-devel libpng-devel libjpeg-devel`
   * On Windows,
     * download lxml: http://www.lfd.uci.edu/~gohlke/pythonlibs/#lxml
     * install lxml: `pip install lxml-*-cp27-cp27m-win*.whl`
   * On MacOS, `brew install mitmproxy`
 * tor.
-  * On Ubuntu, `sudo apt-get install -y tor`
+  * On Ubuntu / Kali, `sudo apt-get install -y tor`
   * On Fedora, `sudo dnf install -y tor`
   * On Windows,
     * download tor expert bundle: https://www.torproject.org/download/download.html.en
