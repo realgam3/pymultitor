@@ -17,7 +17,6 @@ secret:secret
 summer:summer
 internet:internet
 service:service
-:
 canada:canada
 hello:hello
 ranger:ranger
