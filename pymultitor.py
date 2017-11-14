@@ -169,7 +169,7 @@ class MultiTor(object):
 
 
 class MultiTorProxy(Master):
-    def __init__(self, listen_host="", listen_port=8080, socks=False, insecure=False,
+    def __init__(self, listen_host="", listen_port=8080, socks=False, auth=None, insecure=False,
                  processes=2, cmd='tor',
                  on_count=0, on_string=None, on_regex=None, on_rst=False, on_callback=None):
         self.logger = logging.getLogger(__name__)
@@ -195,13 +195,17 @@ class MultiTorProxy(Master):
         # Create Proxy Server
         self.insecure = insecure
 
-        options = ProxyOptions(
-            listen_host=listen_host,
-            listen_port=listen_port,
-            ssl_insecure=self.insecure,
-            mode="socks5" if socks else "regular",
-            rawtcp=False
-        )
+        options_dict = {
+            'listen_host': listen_host,
+            'listen_port': listen_port,
+            'ssl_insecure': self.insecure,
+            'mode': "socks5" if socks else "regular",
+            'rawtcp': False
+        }
+        options_dict['proxyauth' if new_mitmproxy else 'auth_singleuser'] = auth
+
+        options = ProxyOptions(**options_dict)
+
         setattr(options, websocket_key, False)
         config = ProxyConfig(options)
         server = ProxyServer(config)
@@ -283,7 +287,7 @@ class MultiTorProxy(Master):
             self.on_callback(self, flow, error)
 
 
-def run(listen_host="", listen_port=8080, socks=False, insecure=False,
+def run(listen_host="", listen_port=8080, socks=False, auth=None, insecure=False,
         processes=2, cmd='tor',
         on_count=0, on_string=None, on_regex=None, on_rst=False, on_callback=None):
     # Warn If No Change IP Configuration:
@@ -291,7 +295,7 @@ def run(listen_host="", listen_port=8080, socks=False, insecure=False,
         logger.warning("Change IP Configuration Not Set (Acting As Regular Tor Proxy)")
 
     proxy = MultiTorProxy(
-        listen_host=listen_host, listen_port=listen_port, socks=socks, insecure=insecure,
+        listen_host=listen_host, listen_port=listen_port, socks=socks, auth=auth, insecure=insecure,
         processes=processes, cmd=cmd,
         on_count=on_count, on_string=on_string, on_regex=on_regex, on_rst=on_rst, on_callback=on_callback
     )
@@ -322,6 +326,9 @@ def main(args=None):
     parser.add_argument("-s", "--socks",
                         help="Use As Socks Proxy (Not HTTP Proxy).",
                         action='store_true')
+    parser.add_argument("-a", "--auth",
+                        help="Set proxy authentication (Format: 'username:pass').",
+                        dest='auth')
     parser.add_argument("-i", "--insecure",
                         help="Insecure SSL.",
                         action='store_true')
