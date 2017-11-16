@@ -200,9 +200,10 @@ class MultiTorProxy(Master):
             'listen_port': listen_port,
             'ssl_insecure': self.insecure,
             'mode': "socks5" if socks else "regular",
-            'rawtcp': False
+            'rawtcp': False,
+            'auth_singleuser': auth
         }
-        options_dict['proxyauth' if new_mitmproxy else 'auth_singleuser'] = auth
+        # options_dict['proxyauth' if new_mitmproxy else 'auth_singleuser'] = auth
 
         options = ProxyOptions(**options_dict)
 
