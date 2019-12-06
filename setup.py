@@ -14,6 +14,9 @@ with open(path.join(__folder__, 'pymultitor.py')) as lib_file:
     r = re.search(r'__version__\s+=\s+(?P<q>["\'])(?P<ver>\d+(?:\.\d+)*)(?P=q)', lib_file.read())
     version = r.group('ver')
 
+with open(path.join(__folder__, 'requirements.txt')) as req_file:
+    install_requires = req_file.read()
+
 setup(
     name='PyMultitor',
     version=version,
@@ -28,11 +31,7 @@ setup(
             'pymultitor = pymultitor:main',
         ]
     },
-    install_requires=[
-        'stem >= 1.5.4',
-        'mitmproxy >= 0.18.3, < 3.0.0',
-        'requests[socks] >= 2.9.1, < 2.12.0',
-    ],
+    install_requires=install_requires,
     license="GPLv3",
     platforms='any',
     url='https://github.com/realgam3/pymultitor',
@@ -46,7 +45,6 @@ setup(
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: Microsoft :: Windows',
         'Operating System :: POSIX :: Linux',
-        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3',
         'Topic :: Security',
         'Topic :: Internet',

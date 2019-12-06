@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import re
 import sys
 import json
@@ -11,30 +9,17 @@ import platform
 import itertools
 from os import path
 from shutil import rmtree
+from mitmproxy import ctx
 from tempfile import mkdtemp
+from mitmproxy.http import HTTPResponse
+from mitmproxy.tools.main import mitmdump
 from multiprocessing.pool import ThreadPool
 from stem.control import Controller, Signal
 from requests.exceptions import ConnectionError
 from stem.process import launch_tor_with_config
-from mitmproxy.proxy import ProxyServer, ProxyConfig
-from mitmproxy.options import Options as ProxyOptions
-from mitmproxy.controller import handler as proxy_handler
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-# If mitmproxy > 0.18.3
-websocket_key = 'websocket'
-new_mitmproxy = hasattr(ProxyOptions(), websocket_key)
-if new_mitmproxy:
-    from mitmproxy.http import HTTPResponse
-    from mitmproxy.master import Master
-else:
-    websocket_key = 'websockets'
-    from mitmproxy.flow import State, FlowMaster as Master
-    from mitmproxy.models import HTTPResponse
-
-__version__ = '2.1.0'
-
-logger = logging.getLogger(__name__)
+__version__ = '3.1.0'
 
 
 def is_windows():
@@ -168,62 +153,95 @@ class MultiTor(object):
             tor.shutdown()
 
 
-class MultiTorProxy(Master):
-    def __init__(self, listen_host="", listen_port=8080, socks=False, auth=None, insecure=False,
-                 processes=2, cmd='tor',
-                 on_count=0, on_string=None, on_regex=None, on_rst=False, on_callback=None):
+class PyMultiTor(object):
+    def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.insecure = False
 
         # Change IP Policy (Configuration)
         self.counter = itertools.count(1)
-        self.on_count = on_count
-        self.on_regex = on_regex
-        self.on_rst = on_rst
+        self.on_count = 0
+        self.on_string = ""
+        self.on_regex = ""
+        self.on_rst = False
 
-        self.on_string = on_string
-        if self.on_string:
-            # For Python 3
-            self.on_string = str.encode(on_string)
+        self.multitor = None
 
-        self.on_callback = None
-        if callable(on_callback):
-            self.on_callback = on_callback
+    @staticmethod
+    def load(loader):
+        # MultiTor Configuration
+        loader.add_option(
+            name="tor_processes",
+            typespec=int,
+            default=2,
+            help="Number Of Tor Processes On The Cycle",
+        )
+        loader.add_option(
+            name="tor_cmd",
+            typespec=str,
+            default='tor',
+            help="Tor Cmd (Executable Path + Arguments)",
+        )
 
-        # Create MultiTor (Tor Pool)
-        self.multitor = MultiTor(size=processes, cmd=cmd)
+        # When To Change IP Address
+        loader.add_option(
+            name="on_count",
+            typespec=int,
+            default=0,
+            help="Change IP Every x Requests (Resources Also Counted)",
+        )
+        loader.add_option(
+            name="on_string",
+            typespec=str,
+            default="",
+            help="Change IP When String Found On The Response Content",
+        )
+        loader.add_option(
+            name="on_regex",
+            typespec=str,
+            default="",
+            help="Change IP When Regex Found On The Response Content",
+        )
+        loader.add_option(
+            name="on_rst",
+            typespec=bool,
+            default=False,
+            help="Change IP When Connection Closed With TCP RST",
+        )
 
-        # Create Proxy Server
-        self.insecure = insecure
+    def configure(self, updates):
+        # Configure Logger
+        logging.basicConfig(level=logging.DEBUG if ctx.options.termlog_verbosity.lower() == 'debug' else logging.INFO,
+                            format='%(asctime)s %(levelname)-8s %(message)s',
+                            datefmt='%d-%m-%y %H:%M:%S')
 
-        options_dict = {
-            'listen_host': listen_host,
-            'listen_port': listen_port,
-            'ssl_insecure': self.insecure,
-            'mode': "socks5" if socks else "regular",
-            'rawtcp': False,
-            'auth_singleuser': auth
-        }
-        # options_dict['proxyauth' if new_mitmproxy else 'auth_singleuser'] = auth
+        # Disable Other Loggers
+        logging.getLogger("stem").disabled = True
+        logging.getLogger("requests.packages.urllib3.connectionpool").disabled = True
 
-        options = ProxyOptions(**options_dict)
+        # Log CMD Args If Debug Mode Enabled
+        self.logger.debug("Running With CMD Args: %s" % json.dumps({
+            update: getattr(ctx.options, update) for update in updates
+        }))
 
-        setattr(options, websocket_key, False)
-        config = ProxyConfig(options)
-        server = ProxyServer(config)
+        self.on_count = ctx.options.on_count
+        self.on_string = str.encode(ctx.options.on_string)
+        self.on_regex = ctx.options.on_regex
+        self.on_rst = ctx.options.on_rst
 
-        if new_mitmproxy:
-            super(self.__class__, self).__init__(options, server)
-        else:
-            state = State()
-            super(self.__class__, self).__init__(options, server, state)
+        self.insecure = ctx.options.ssl_insecure
 
-    def run(self):
+        self.multitor = MultiTor(size=ctx.options.tor_processes, cmd=ctx.options.tor_cmd)
         try:
             self.multitor.run()
-            super(self.__class__, self).run()
         except KeyboardInterrupt:
             self.multitor.shutdown()
-            self.shutdown()
+
+        atexit.register(self.multitor.shutdown)
+
+        # Warn If No Change IP Configuration:
+        if not self.on_count and not self.on_string and not self.on_regex and not self.on_rst:
+            self.logger.warning("Change IP Configuration Not Set (Acting As Regular Tor Proxy)")
 
     def create_response(self, request):
         response = requests.request(
@@ -236,22 +254,16 @@ class MultiTorProxy(Master):
             proxies=self.multitor.proxy
         )
 
-        response_headers = dict(response.headers)
-        if not new_mitmproxy:
-            response_headers = response.headers.items()
-
         return HTTPResponse.make(
             status_code=response.status_code,
             content=response.content,
-            headers=response_headers,
+            headers=dict(response.headers),
         )
 
-    @proxy_handler
     def request(self, flow):
-        error = None
         try:
             flow.response = self.create_response(flow.request)
-        except ConnectionError as error:
+        except ConnectionError:
             # If TCP Rst Configured
             if self.on_rst:
                 self.logger.debug("Got TCP Rst, While TCP Rst Configured")
@@ -283,29 +295,6 @@ class MultiTorProxy(Master):
             self.counter = itertools.count(1)
             self.multitor.new_identity()
 
-        # CallBack (For Developers)
-        if self.on_callback:
-            self.on_callback(self, flow, error)
-
-
-def run(listen_host="", listen_port=8080, socks=False, auth=None, insecure=False,
-        processes=2, cmd='tor',
-        on_count=0, on_string=None, on_regex=None, on_rst=False, on_callback=None):
-    # Warn If No Change IP Configuration:
-    if on_count == 0 and on_string is None and on_regex is None and not on_rst:
-        logger.warning("Change IP Configuration Not Set (Acting As Regular Tor Proxy)")
-
-    proxy = MultiTorProxy(
-        listen_host=listen_host, listen_port=listen_port, socks=socks, auth=auth, insecure=insecure,
-        processes=processes, cmd=cmd,
-        on_count=on_count, on_string=on_string, on_regex=on_regex, on_rst=on_rst, on_callback=on_callback
-    )
-
-    # Shutdown When Exit (To Be Sure All Cleaned)
-    atexit.register(proxy.multitor.shutdown)
-
-    return proxy.run()
-
 
 def main(args=None):
     if args is None:
@@ -317,11 +306,11 @@ def main(args=None):
     # Proxy Configuration
     parser.add_argument("-lh", "--host",
                         help="Proxy Listen Host.",
-                        dest='listen_host',
+                        dest="listen_host",
                         default="127.0.0.1")
     parser.add_argument("-lp", "--port",
                         help="Proxy Listen Port.",
-                        dest='listen_port',
+                        dest="listen_port",
                         type=int,
                         default=8080)
     parser.add_argument("-s", "--socks",
@@ -329,23 +318,24 @@ def main(args=None):
                         action='store_true')
     parser.add_argument("-a", "--auth",
                         help="Set proxy authentication (Format: 'username:pass').",
-                        dest='auth')
+                        dest="auth",
+                        default="")
     parser.add_argument("-i", "--insecure",
                         help="Insecure SSL.",
                         action='store_true')
     parser.add_argument("-d", "--debug",
                         help="Debug Log.",
-                        action='store_true')
+                        action="store_true")
 
     # MultiTor Configuration
     parser.add_argument("-p", "--tor-processes",
                         help="Number Of Tor Processes On The Cycle.",
-                        dest='processes',
+                        dest="processes",
                         type=int,
                         default=2)
     parser.add_argument("-c", "--tor-cmd",
                         help="Tor Cmd (Executable Path + Arguments).",
-                        dest='cmd',
+                        dest="cmd",
                         default="tor")
 
     # When To Change IP Address
@@ -355,31 +345,51 @@ def main(args=None):
                         default=0)
     parser.add_argument("--on-string",
                         help="Change IP When String Found On The Response Content.",
-                        default=None)
+                        default="")
     parser.add_argument("--on-regex",
                         help="Change IP When Regex Found On The Response Content.",
-                        default=None)
+                        default="")
     parser.add_argument("--on-rst",
                         help="Change IP When Connection Closed With TCP RST.",
-                        action='store_true')
+                        action="store_true")
 
     sys_args = vars(parser.parse_args(args=args))
+    mitmdump_args = [
+        '--scripts', __file__,
+        '--mode', 'socks5' if sys_args['socks'] else 'regular',
+        '--listen-host', sys_args['listen_host'],
+        '--listen-port', str(sys_args['listen_port']),
+        '--set', f'tor_cmd={sys_args["cmd"]}',
+        '--set', f'tor_processes={sys_args["processes"]}',
+        '--set', f'on_string={sys_args["on_string"]}',
+        '--set', f'on_regex={sys_args["on_regex"]}',
+        '--set', f'on_count={sys_args["on_count"]}',
+    ]
+    if sys_args['auth']:
+        mitmdump_args.extend([
+            '--proxyauth', sys_args["auth"],
+        ])
 
-    # Configure Logger
-    logging.basicConfig(level=logging.DEBUG if sys_args.pop('debug') else logging.INFO,
-                        format='%(asctime)s %(levelname)-8s %(message)s',
-                        datefmt='%d-%m-%y %H:%M:%S')
+    if sys_args['on_rst']:
+        mitmdump_args.extend([
+            '--set', f'on_rst',
+        ])
 
-    # Disable Other Loggers
-    logging.getLogger("stem").disabled = True
-    logging.getLogger("requests.packages.urllib3.connectionpool").disabled = True
+    if sys_args['debug']:
+        mitmdump_args.extend([
+            '--verbose',
+        ])
 
-    # Log CMD Args If Debug Mode Enabled
-    logger.debug("Running With CMD Args: %s" % json.dumps(sys_args))
+    if sys_args['insecure']:
+        mitmdump_args.extend([
+            '--ssl-insecure',
+        ])
+    return mitmdump(args=mitmdump_args)
 
-    # Run PyMultitor
-    run(**sys_args)
 
+addons = [
+    PyMultiTor()
+]
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
