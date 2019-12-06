@@ -22,6 +22,7 @@ setup(
     version=version,
     description='PyMultitor - Never Stop Even If Your IP Dropped.',
     long_description=long_description,
+    long_description_content_type="text/markdown",
     author='RealGame (Tomer Zait)',
     author_email='realgam3@gmail.com',
     packages=find_packages(exclude=['examples', 'tests']),
