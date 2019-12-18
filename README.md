@@ -16,7 +16,7 @@ With a large number of IP addresses performing the attacks, better results are g
 ### Prerequisites
 
 * Python 3.6+.
-* mitmproxy (https://mitmproxy.com/).
+* mitmproxy (https://mitmproxy.org/).
 * tor.
   * On Ubuntu / Kali, `sudo apt install -y tor`
   * On Centos, `sudo yum install -y tor`
