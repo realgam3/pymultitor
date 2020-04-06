@@ -66,7 +66,7 @@ See `--help` for the complete list, but in short:
 
 ```sh
 Usage: pymultitor [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-i] [-d]  
-                  [-p PROCESSES] [-c CMD] [--on-count ON_COUNT]  
+                  [-p PROCESSES] [-c CMD] [--on-count ON_COUNT] [-e CONFIG]  
                   [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst]  
 
 # When To Change IP Address
