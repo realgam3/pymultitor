@@ -19,7 +19,7 @@ from requests.exceptions import ConnectionError
 from stem.process import launch_tor_with_config
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-__version__ = '3.1.0'
+__version__ = '3.2.0'
 
 
 def is_windows():
@@ -27,9 +27,10 @@ def is_windows():
 
 
 class Tor(object):
-    def __init__(self, cmd='tor'):
+    def __init__(self, cmd='tor', config="{}"):
         self.logger = logging.getLogger(__name__)
         self.tor_cmd = cmd
+        self.tor_config = config or {}
         self.socks_port = self.free_port()
         self.control_port = self.free_port()
         self.data_directory = mkdtemp()
@@ -56,6 +57,7 @@ class Tor(object):
                 "DataDirectory": self.data_directory,
                 "AllowSingleHopCircuits": "1",
                 "ExcludeSingleHopRelays": "0",
+                **self.tor_config
             },
             tor_cmd=self.tor_cmd,
             init_msg_handler=self.print_bootstrapped_line
@@ -115,13 +117,44 @@ class Tor(object):
 
 
 class MultiTor(object):
-    def __init__(self, size=2, cmd='tor'):
+    def __init__(self, size=2, cmd='tor', config=None):
         self.logger = logging.getLogger(__name__)
         self.cmd = cmd
         self.size = size
         self.list = []
         self.cycle = None
         self.current = None
+        try:
+            self.config = self.parse_config(config)
+        except Exception as error:
+            print(error, config, type(config))
+
+    def parse_config(self, config=None):
+        config = config or {}
+
+        cfg = {}
+        try:
+            if isinstance(config, dict):
+                cfg = config
+            elif path.isfile(config):
+                with open(config, encoding='utf-8') as cfg_file:
+                    json.load(cfg_file)
+            else:
+                cfg = json.loads(config)
+        except (TypeError, json.JSONDecodeError):
+            self.logger.error("Could Not Parse Extended JSON Configuration %s" % repr(config))
+            return {}
+        except Exception as error:
+            self.logger.error("Got Unknown Error %s" % error)
+            return {}
+
+        # Remove Port / Data Configurations
+        cfg.pop('ControlPort', None)
+        cfg.pop('SOCKSPort', None)
+        cfg.pop('DataDirectory', None)
+
+        self.logger.debug("Extended Configuration: %s" % json.dumps(cfg))
+        return cfg
 
     def run(self):
         self.logger.info("Executing %d Tor Processes" % self.size)
@@ -129,7 +162,7 @@ class MultiTor(object):
         # If OS Platform Is Windows Run Processes Async
         if is_windows():
             pool = ThreadPool(processes=self.size)
-            self.list = pool.map(lambda _: Tor(cmd=self.cmd).run(), range(self.size))
+            self.list = pool.map(lambda _: Tor(cmd=self.cmd, config=self.config).run(), range(self.size))
         else:
             self.list = [Tor(cmd=self.cmd).run() for _ in range(self.size)]
 
@@ -182,6 +215,12 @@ class PyMultiTor(object):
             default='tor',
             help="Tor Cmd (Executable Path + Arguments)",
         )
+        loader.add_option(
+            name="tor_config",
+            typespec=str,
+            default="{}",
+            help="Tor Extended JSON Configuration",
+        )
 
         # When To Change IP Address
         loader.add_option(
@@ -231,7 +270,11 @@ class PyMultiTor(object):
 
         self.insecure = ctx.options.ssl_insecure
 
-        self.multitor = MultiTor(size=ctx.options.tor_processes, cmd=ctx.options.tor_cmd)
+        self.multitor = MultiTor(
+            size=ctx.options.tor_processes,
+            cmd=ctx.options.tor_cmd,
+            config=ctx.options.tor_config
+        )
         try:
             self.multitor.run()
         except KeyboardInterrupt:
@@ -337,6 +380,10 @@ def main(args=None):
                         help="Tor Cmd (Executable Path + Arguments).",
                         dest="cmd",
                         default="tor")
+    parser.add_argument("-e", "--tor-config",
+                        help="Tor Extended JSON Configuration.",
+                        dest="config",
+                        default="{}")
 
     # When To Change IP Address
     parser.add_argument("--on-count",
@@ -360,6 +407,7 @@ def main(args=None):
         '--listen-host', sys_args['listen_host'],
         '--listen-port', str(sys_args['listen_port']),
         '--set', f'tor_cmd={sys_args["cmd"]}',
+        '--set', f'tor_config={sys_args["config"]}',
         '--set', f'tor_processes={sys_args["processes"]}',
         '--set', f'on_string={sys_args["on_string"]}',
         '--set', f'on_regex={sys_args["on_regex"]}',

@@ -90,3 +90,5 @@ ENV/
 
 # Pycharm project settings
 .idea/
+/Pipfile
+/Pipfile.lock
