@@ -276,14 +276,14 @@ class PyMultiTor(object):
             self.logger.error("Got Unknown Error %s" % error)
 
         # If String Found On Response Content
-        if self.on_string and self.on_string in flow.response.content:
+        if self.on_string and self.on_string in flow.response.text:
             self.logger.debug("String Found On Response Content")
             self.multitor.new_identity()
             # Set Response
             flow.response = self.create_response(flow.request)
 
         # If Regex Found On Response Content
-        if self.on_regex and re.search(self.on_regex, flow.response.content, re.IGNORECASE):
+        if self.on_regex and re.search(self.on_regex, flow.response.text, re.IGNORECASE):
             self.logger.debug("Regex Found On Response Content")
             self.multitor.new_identity()
             # Set Response
