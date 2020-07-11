@@ -197,6 +197,7 @@ class PyMultiTor(object):
         self.on_string = ""
         self.on_regex = ""
         self.on_rst = False
+        self.on_error_code = 0
 
         self.multitor = None
 
@@ -207,19 +208,19 @@ class PyMultiTor(object):
             name="tor_processes",
             typespec=int,
             default=2,
-            help="Number Of Tor Processes On The Cycle",
+            help="number of tor processes in the cycle",
         )
         loader.add_option(
             name="tor_cmd",
             typespec=str,
             default='tor',
-            help="Tor Cmd (Executable Path + Arguments)",
+            help="tor cmd (executable path + arguments)",
         )
         loader.add_option(
             name="tor_config",
             typespec=str,
             default="{}",
-            help="Tor Extended JSON Configuration",
+            help="tor extended json configuration",
         )
 
         # When To Change IP Address
@@ -227,25 +228,31 @@ class PyMultiTor(object):
             name="on_count",
             typespec=int,
             default=0,
-            help="Change IP Every x Requests (Resources Also Counted)",
+            help="change ip every x requests (resources also counted)",
         )
         loader.add_option(
             name="on_string",
             typespec=str,
             default="",
-            help="Change IP When String Found On The Response Content",
+            help="change ip when string found in the response content",
         )
         loader.add_option(
             name="on_regex",
             typespec=str,
             default="",
-            help="Change IP When Regex Found On The Response Content",
+            help="change ip when regex found in The response content",
         )
         loader.add_option(
             name="on_rst",
             typespec=bool,
             default=False,
-            help="Change IP When Connection Closed With TCP RST",
+            help="change ip when connection closed with tcp rst",
+        )
+        loader.add_option(
+            name="on_error_code",
+            typespec=int,
+            default=0,
+            help="change ip when a specific status code returned",
         )
 
     def configure(self, updates):
@@ -267,6 +274,7 @@ class PyMultiTor(object):
         self.on_string = str.encode(ctx.options.on_string)
         self.on_regex = ctx.options.on_regex
         self.on_rst = ctx.options.on_rst
+        self.on_error_code = ctx.options.on_error_code
 
         self.insecure = ctx.options.ssl_insecure
 
@@ -283,7 +291,7 @@ class PyMultiTor(object):
         atexit.register(self.multitor.shutdown)
 
         # Warn If No Change IP Configuration:
-        if not self.on_count and not self.on_string and not self.on_regex and not self.on_rst:
+        if not (self.on_count or self.on_string or self.on_regex or self.on_rst or self.on_error_code):
             self.logger.warning("Change IP Configuration Not Set (Acting As Regular Tor Proxy)")
 
     def create_response(self, request):
@@ -318,16 +326,16 @@ class PyMultiTor(object):
         except Exception as error:
             self.logger.error("Got Unknown Error %s" % error)
 
-        # If String Found On Response Content
+        # If String Found In Response Content
         if self.on_string and self.on_string in flow.response.text:
-            self.logger.debug("String Found On Response Content")
+            self.logger.debug("String Found In Response Content")
             self.multitor.new_identity()
             # Set Response
             flow.response = self.create_response(flow.request)
 
-        # If Regex Found On Response Content
+        # If Regex Found In Response Content
         if self.on_regex and re.search(self.on_regex, flow.response.text, re.IGNORECASE):
-            self.logger.debug("Regex Found On Response Content")
+            self.logger.debug("Regex Found In Response Content")
             self.multitor.new_identity()
             # Set Response
             flow.response = self.create_response(flow.request)
@@ -337,6 +345,13 @@ class PyMultiTor(object):
             self.logger.debug("Counter Raised To The Configured Number")
             self.counter = itertools.count(1)
             self.multitor.new_identity()
+
+        # If A Specific Status Code Returned
+        if self.on_error_code and self.on_error_code == flow.response.status_code:
+            self.logger.debug("Specific Status Code Returned")
+            self.multitor.new_identity()
+            # Set Response
+            flow.response = self.create_response(flow.request)
 
 
 def main(args=None):
@@ -348,23 +363,23 @@ def main(args=None):
 
     # Proxy Configuration
     parser.add_argument("-lh", "--host",
-                        help="Proxy Listen Host.",
+                        help="proxy listen host.",
                         dest="listen_host",
                         default="127.0.0.1")
     parser.add_argument("-lp", "--port",
-                        help="Proxy Listen Port.",
+                        help="proxy listen port",
                         dest="listen_port",
                         type=int,
                         default=8080)
     parser.add_argument("-s", "--socks",
-                        help="Use As Socks Proxy (Not HTTP Proxy).",
+                        help="use as socks proxy (not http proxy)",
                         action='store_true')
     parser.add_argument("-a", "--auth",
-                        help="Set proxy authentication (Format: 'username:pass').",
+                        help="set proxy authentication (format: 'username:pass')",
                         dest="auth",
                         default="")
     parser.add_argument("-i", "--insecure",
-                        help="Insecure SSL.",
+                        help="insecure ssl",
                         action='store_true')
     parser.add_argument("-d", "--debug",
                         help="Debug Log.",
@@ -372,33 +387,37 @@ def main(args=None):
 
     # MultiTor Configuration
     parser.add_argument("-p", "--tor-processes",
-                        help="Number Of Tor Processes On The Cycle.",
+                        help="number of tor processes in the cycle",
                         dest="processes",
                         type=int,
                         default=2)
     parser.add_argument("-c", "--tor-cmd",
-                        help="Tor Cmd (Executable Path + Arguments).",
+                        help="tor cmd (executable path + arguments)",
                         dest="cmd",
                         default="tor")
     parser.add_argument("-e", "--tor-config",
-                        help="Tor Extended JSON Configuration.",
+                        help="tor extended json configuration",
                         dest="config",
                         default="{}")
 
     # When To Change IP Address
     parser.add_argument("--on-count",
-                        help="Change IP Every x Requests (Resources Also Counted).",
+                        help="change ip every x requests (resources also counted)",
                         type=int,
                         default=0)
     parser.add_argument("--on-string",
-                        help="Change IP When String Found On The Response Content.",
+                        help="change ip when string found in the response content",
                         default="")
     parser.add_argument("--on-regex",
-                        help="Change IP When Regex Found On The Response Content.",
+                        help="change ip when regex found in The response content",
                         default="")
     parser.add_argument("--on-rst",
-                        help="Change IP When Connection Closed With TCP RST.",
+                        help="change ip when connection closed with tcp rst",
                         action="store_true")
+    parser.add_argument("--on-error-code",
+                        help="change ip when a specific status code returned",
+                        type=int,
+                        default=0)
 
     sys_args = vars(parser.parse_args(args=args))
     mitmdump_args = [
@@ -412,6 +431,7 @@ def main(args=None):
         '--set', f'on_string={sys_args["on_string"]}',
         '--set', f'on_regex={sys_args["on_regex"]}',
         '--set', f'on_count={sys_args["on_count"]}',
+        '--set', f'on_error_code={sys_args["on_error_code"]}',
     ]
     if sys_args['auth']:
         mitmdump_args.extend([
