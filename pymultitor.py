@@ -50,18 +50,23 @@ class Tor(object):
 
     def run(self):
         self.logger.debug("[%05d] Executing Tor Process" % self.id)
-        self.process = launch_tor_with_config(
-            config={
-                "ControlPort": str(self.control_port),
-                "SOCKSPort": str(self.socks_port),
-                "DataDirectory": self.data_directory,
-                "AllowSingleHopCircuits": "1",
-                "ExcludeSingleHopRelays": "0",
-                **self.tor_config
-            },
-            tor_cmd=self.tor_cmd,
-            init_msg_handler=self.print_bootstrapped_line
-        )
+        try:
+            self.process = launch_tor_with_config(
+                config={
+                    "ControlPort": str(self.control_port),
+                    "SOCKSPort": str(self.socks_port),
+                    "DataDirectory": self.data_directory,
+                    "AllowSingleHopCircuits": "1",
+                    "ExcludeSingleHopRelays": "0",
+                    **self.tor_config
+                },
+                tor_cmd=self.tor_cmd,
+                init_msg_handler=self.print_bootstrapped_line
+            )
+        except Exception as e:
+            self.logger.error("[%05d] Failed To Launch Tor Process: %s" % (self.id, str(e)))
+            self.__is_shutdown = True
+            return self
 
         self.logger.debug("[%05d] Creating Tor Controller" % self.id)
         self.controller = Controller.from_port(port=self.control_port)
