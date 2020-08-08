@@ -27,7 +27,7 @@ def is_windows():
 
 
 class Tor(object):
-    def __init__(self, cmd='tor', config="{}"):
+    def __init__(self, cmd='tor', config=None):
         self.logger = logging.getLogger(__name__)
         self.tor_cmd = cmd
         self.tor_config = config or {}
@@ -164,7 +164,7 @@ class MultiTor(object):
             pool = ThreadPool(processes=self.size)
             self.list = pool.map(lambda _: Tor(cmd=self.cmd, config=self.config).run(), range(self.size))
         else:
-            self.list = [Tor(cmd=self.cmd).run() for _ in range(self.size)]
+            self.list = [Tor(cmd=self.cmd, config=self.config).run() for _ in range(self.size)]
 
         self.logger.info("All Tor Processes Executed Successfully")
         self.cycle = itertools.cycle(self.list)
