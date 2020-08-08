@@ -341,7 +341,7 @@ class PyMultiTor(object):
             flow.response = self.create_response(flow.request)
 
         # If Counter Raised To The Configured Number
-        if 0 < next(self.counter) >= self.on_count:
+        if self.on_count and next(self.counter) >= self.on_count:
             self.logger.debug("Counter Raised To The Configured Number")
             self.counter = itertools.count(1)
             self.multitor.new_identity()
