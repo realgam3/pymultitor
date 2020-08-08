@@ -320,11 +320,20 @@ class PyMultiTor(object):
                 self.logger.debug("Got TCP Rst, While TCP Rst Configured")
                 self.multitor.new_identity()
                 # Set Response
-                flow.response = self.create_response(flow.request)
+                try:
+                    flow.response = self.create_response(flow.request)
+                except Exception as error:
+                    self.logger.error("Got Unknown Error (after second TCP Rst) %s" % error)
+                    flow.response = HTTPResponse.make(400, "Unknown Error (after second TCP Rst) %s" % error)
+                    return
             else:
                 self.logger.error("Got TCP Rst, While TCP Rst Not Configured")
+                flow.response = HTTPResponse.make(400, "Got TCP Rst")
+                return
         except Exception as error:
             self.logger.error("Got Unknown Error %s" % error)
+            flow.response = HTTPResponse.make(400, "Unknown Error %s" % error)
+            return
 
         # If String Found In Response Content
         if self.on_string and self.on_string in flow.response.text:
