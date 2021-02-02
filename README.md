@@ -65,13 +65,16 @@ Bug reports on installation issues are welcome!
 See `--help` for the complete list, but in short:
 
 ```sh
-Usage: pymultitor [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-i] [-d]  
-                  [-p PROCESSES] [-c CMD] [--on-count ON_COUNT] [-e CONFIG]  
-                  [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst]  
+usage: pymultitor.py [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s]
+                     [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG]
+                     [--on-count ON_COUNT] [--on-string ON_STRING]
+                     [--on-regex ON_REGEX] [--on-rst]
+                     [--on-error-code ON_ERROR_CODE]
 
-# When To Change IP Address
---on-count    Change IP Every x Requests (Resources Also Counted).  
---on-string   Change IP When String Found On The Response Content.  
---on-regex    Change IP When Regex Found On The Response Content.  
---on-rst      Change IP When Connection Closed With TCP RST.  
+# Trigger To Change IP Address
+--on-count        change ip every x requests (resources also counted)
+--on-string       change ip when string found in the response content
+--on-regex        change ip when regex found in The response content
+--on-rst          change ip when connection closed with tcp rst
+--on-error-code   change ip when a specific status code returned
 ```
