@@ -1,9 +1,9 @@
-import imp
 import socket
 import requests
 from os import path
 from time import sleep
 from multiprocessing import Process
+from importlib.machinery import SourceFileLoader
 
 __folder__ = path.dirname(__file__)
 
@@ -19,7 +19,7 @@ def check_pymultitor(address='127.0.0.1', port=8080):
 
 def execute_pymultitor():
     pymultitor_path = path.abspath(path.join(__folder__, '..', '..', 'pymultitor.py'))
-    pymultitor_module = imp.load_source('pymultitor', pymultitor_path)
+    pymultitor_module = SourceFileLoader('pymultitor', pymultitor_path).load_module("pymultitor")
     process = Process(target=pymultitor_module.main, kwargs={
         'args': ['-d', '-p', '5', '--on-count', '2']
     })

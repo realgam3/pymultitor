@@ -8,6 +8,7 @@ import requests
 import platform
 import itertools
 from os import path
+from time import sleep
 from shutil import rmtree
 from mitmproxy import ctx
 from tempfile import mkdtemp
@@ -24,6 +25,46 @@ __version__ = '3.2.0'
 
 def is_windows():
     return platform.system().lower() == 'windows'
+
+
+def monkey_patch():
+    _log_mitmproxy = logging.getLogger("mitmproxy")
+
+    # Patch mitmproxy.log.Log.__call__
+    from mitmproxy import log
+
+    def _log__call__(self, text, level="info"):
+        getattr(_log_mitmproxy, level)(text)
+
+    setattr(log.Log, "__call__", _log__call__)
+
+    # Patch mitmproxy.addons.termlog.log
+    from mitmproxy.addons import termlog
+
+    def _termlog_log(self, e):
+        getattr(_log_mitmproxy, e.level)(e.msg)
+
+    setattr(termlog.TermLog, "log", _termlog_log)
+
+    # Patch mitmproxy.addon.dumper.echo & mitmproxy.addon.dumper.echo_error
+    from mitmproxy.addons import dumper
+
+    def _dumper_echo(self, text, ident=None, **style):
+        if ident:
+            text = dumper.indent(ident, text)
+        _log_mitmproxy.info(text)
+
+        if self.outfp:
+            self.outfp.flush()
+
+    setattr(dumper.Dumper, "echo", _dumper_echo)
+
+    def _dumper_echo_error(self, text, **style):
+        _log_mitmproxy.error(text)
+        if self.errfp:
+            self.errfp.flush()
+
+    setattr(dumper.Dumper, "echo_error", _dumper_echo_error)
 
 
 class Tor(object):
@@ -49,7 +90,7 @@ class Tor(object):
         self.shutdown()
 
     def run(self):
-        self.logger.debug("[%05d] Executing Tor Process" % self.id)
+        self.logger.debug(f"[{self.id:05d}] Executing Tor Process")
         self.process = launch_tor_with_config(
             config={
                 "ControlPort": str(self.control_port),
@@ -63,7 +104,7 @@ class Tor(object):
             init_msg_handler=self.print_bootstrapped_line
         )
 
-        self.logger.debug("[%05d] Creating Tor Controller" % self.id)
+        self.logger.debug(f"[{self.id:05d}] Creating Tor Controller")
         self.controller = Controller.from_port(port=self.control_port)
         self.controller.authenticate()
 
@@ -74,7 +115,7 @@ class Tor(object):
             return
 
         self.__is_shutdown = True
-        self.logger.debug("[%05d] Destroying Tor" % self.id)
+        self.logger.debug(f"[{self.id:05d}] Destroying Tor")
         self.controller.close()
         self.process.terminate()
         self.process.wait()
@@ -86,21 +127,24 @@ class Tor(object):
     def newnym_available(self):
         return self.controller.is_newnym_available()
 
+    def newnym_wait(self):
+        return self.controller.get_newnym_wait()
+
     def newnym(self):
         if not self.newnym_available():
-            self.logger.warning("[%05d] Cant Change Tor Identity (Need More Tor Processes)" % self.id)
+            self.logger.debug(f"[{self.id:05d}] Could Not Change Tor Identity (Wait {round(self.newnym_wait())}s)")
             return False
 
-        self.logger.debug("[%05d] Changing Tor Identity" % self.id)
+        self.logger.info(f"[{self.id:05d}] Changing Tor Identity")
         self.controller.signal(Signal.NEWNYM)
         return True
 
     def print_bootstrapped_line(self, line):
         if "Bootstrapped" in line:
-            self.logger.debug("[%05d] Tor Bootstrapped Line: %s" % (self.id, line))
+            self.logger.debug(f"[{self.id:05d}] Tor Bootstrapped Line: {line}")
 
             if "100%" in line:
-                self.logger.debug("[%05d] Tor Process Executed Successfully" % self.id)
+                self.logger.debug(f"[{self.id:05d}] Tor Process Executed Successfully")
 
     @staticmethod
     def free_port():
@@ -142,10 +186,10 @@ class MultiTor(object):
             else:
                 cfg = json.loads(config)
         except (TypeError, json.JSONDecodeError):
-            self.logger.error("Could Not Parse Extended JSON Configuration %s" % repr(config))
+            self.logger.error(f"Could Not Parse Extended JSON Configuration {repr(config)}")
             return {}
         except Exception as error:
-            self.logger.error("Got Unknown Error %s" % error)
+            self.logger.error(f"Got Unknown Error {error}")
             return {}
 
         # Remove Port / Data Configurations
@@ -153,11 +197,11 @@ class MultiTor(object):
         cfg.pop('SOCKSPort', None)
         cfg.pop('DataDirectory', None)
 
-        self.logger.debug("Extended Configuration: %s" % json.dumps(cfg))
+        self.logger.debug(f"Extended Configuration: {json.dumps(cfg)}")
         return cfg
 
     def run(self):
-        self.logger.info("Executing %d Tor Processes" % self.size)
+        self.logger.info(f"Executing {self.size} Tor Processes")
 
         # If OS Platform Is Windows Run Processes Async
         if is_windows():
@@ -172,12 +216,16 @@ class MultiTor(object):
 
     @property
     def proxy(self):
-        proxy_url = 'socks5://127.0.0.1:%d' % self.current.socks_port
+        proxy_url = f'socks5://127.0.0.1:{self.current.socks_port:d}'
         return {'http': proxy_url, 'https': proxy_url}
 
     def new_identity(self):
-        self.current.newnym()
-        self.current = next(self.cycle)
+        identity_changed = False
+        while not identity_changed:
+            identity_changed = self.current.newnym()
+            self.current = next(self.cycle)
+            if not identity_changed:
+                sleep(0.1)
 
         return self.proxy
 
@@ -192,7 +240,7 @@ class PyMultiTor(object):
         self.insecure = False
 
         # Change IP Policy (Configuration)
-        self.counter = itertools.count(1)
+        self.counter = itertools.count()
         self.on_count = 0
         self.on_string = ""
         self.on_regex = ""
@@ -201,8 +249,7 @@ class PyMultiTor(object):
 
         self.multitor = None
 
-    @staticmethod
-    def load(loader):
+    def load(self, loader):
         # MultiTor Configuration
         loader.add_option(
             name="tor_processes",
@@ -261,17 +308,17 @@ class PyMultiTor(object):
                             format='%(asctime)s %(levelname)-8s %(message)s',
                             datefmt='%d-%m-%y %H:%M:%S')
 
-        # Disable Other Loggers
-        logging.getLogger("stem").disabled = True
-        logging.getLogger("requests.packages.urllib3.connectionpool").disabled = True
+        # Disable Loggers
+        monkey_patch()
+        for logger_name in ["stem", "urllib3.connectionpool", "mitmproxy"]:
+            logging.getLogger(logger_name).disabled = True
 
         # Log CMD Args If Debug Mode Enabled
-        self.logger.debug("Running With CMD Args: %s" % json.dumps({
-            update: getattr(ctx.options, update) for update in updates
-        }))
+        cmd_args = json.dumps({update: getattr(ctx.options, update) for update in updates})
+        self.logger.debug(f"Running With CMD Args: {cmd_args}")
 
         self.on_count = ctx.options.on_count
-        self.on_string = str.encode(ctx.options.on_string)
+        self.on_string = ctx.options.on_string.encode()
         self.on_regex = ctx.options.on_regex
         self.on_rst = ctx.options.on_rst
         self.on_error_code = ctx.options.on_error_code
@@ -291,7 +338,7 @@ class PyMultiTor(object):
         atexit.register(self.multitor.shutdown)
 
         # Warn If No Change IP Configuration:
-        if not (self.on_count or self.on_string or self.on_regex or self.on_rst or self.on_error_code):
+        if not any([self.on_count, self.on_string, self.on_regex, self.on_rst, self.on_error_code]):
             self.logger.warning("Change IP Configuration Not Set (Acting As Regular Tor Proxy)")
 
     def create_response(self, request):
@@ -324,7 +371,7 @@ class PyMultiTor(object):
             else:
                 self.logger.error("Got TCP Rst, While TCP Rst Not Configured")
         except Exception as error:
-            self.logger.error("Got Unknown Error %s" % error)
+            self.logger.error(f"Got Unknown Error {error}")
 
         # If String Found In Response Content
         if self.on_string and self.on_string in flow.response.text:
@@ -341,9 +388,8 @@ class PyMultiTor(object):
             flow.response = self.create_response(flow.request)
 
         # If Counter Raised To The Configured Number
-        if 0 < next(self.counter) >= self.on_count:
+        if self.on_count and not next(self.counter) % self.on_count:
             self.logger.debug("Counter Raised To The Configured Number")
-            self.counter = itertools.count(1)
             self.multitor.new_identity()
 
         # If A Specific Status Code Returned
