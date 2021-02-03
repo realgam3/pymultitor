@@ -359,6 +359,7 @@ class PyMultiTor(object):
         )
 
     def request(self, flow):
+        error_message = None
         try:
             flow.response = self.create_response(flow.request)
         except ConnectionError:
@@ -367,13 +368,30 @@ class PyMultiTor(object):
                 self.logger.debug("Got TCP Rst, While TCP Rst Configured")
                 self.multitor.new_identity()
                 # Set Response
-                flow.response = self.create_response(flow.request)
+                try:
+                    flow.response = self.create_response(flow.request)
+                except Exception as error:
+                    error_message = f"Got Error: {error}"
+                    self.logger.error(error_message)
             else:
-                self.logger.error("Got TCP Rst, While TCP Rst Not Configured")
+                error_message = "Got TCP Rst, While TCP Rst Not Configured"
+                self.logger.error(error_message)
         except Exception as error:
-            self.logger.error(f"Got Unknown Error {error}")
+            error_message = f"Got Error: {error}"
+            self.logger.error(error_message)
 
-        # If String Found In Response Content
+        # When There Is No Response
+        if error_message:
+            flow.response = HTTPResponse.make(
+                status_code=500,
+                content=error_message,
+                headers={
+                    "Server": f"pymultitor/{__version__}"
+                }
+            )
+            return
+
+            # If String Found In Response Content
         if self.on_string and self.on_string in flow.response.text:
             self.logger.debug("String Found In Response Content")
             self.multitor.new_identity()
