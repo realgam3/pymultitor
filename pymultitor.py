@@ -372,16 +372,14 @@ class PyMultiTor(object):
                     flow.response = self.create_response(flow.request)
                 except Exception as error:
                     error_message = f"Got Error: {error}"
-                    self.logger.error(error_message)
             else:
                 error_message = "Got TCP Rst, While TCP Rst Not Configured"
-                self.logger.error(error_message)
         except Exception as error:
             error_message = f"Got Error: {error}"
-            self.logger.error(error_message)
 
         # When There Is No Response
         if error_message:
+            self.logger.error(error_message)
             flow.response = HTTPResponse.make(
                 status_code=500,
                 content=error_message,
