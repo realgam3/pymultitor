@@ -349,8 +349,13 @@ class PyMultiTor(object):
             headers=request.headers,
             allow_redirects=False,
             verify=not self.insecure,
-            proxies=self.multitor.proxy
+            proxies=self.multitor.proxy,
+            stream=False
         )
+
+        # Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2.
+        if response.headers.get("Transfer-Encoding") == "chunked":
+            response.headers.pop("Transfer-Encoding")
 
         return HTTPResponse.make(
             status_code=response.status_code,
