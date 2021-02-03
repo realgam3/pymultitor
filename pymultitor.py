@@ -54,15 +54,10 @@ def monkey_patch():
             text = dumper.indent(ident, text)
         _log_mitmproxy.info(text)
 
-        if self.outfp:
-            self.outfp.flush()
-
     setattr(dumper.Dumper, "echo", _dumper_echo)
 
     def _dumper_echo_error(self, text, **style):
         _log_mitmproxy.error(text)
-        if self.errfp:
-            self.errfp.flush()
 
     setattr(dumper.Dumper, "echo_error", _dumper_echo_error)
 
