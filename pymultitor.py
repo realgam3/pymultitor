@@ -318,7 +318,7 @@ class PyMultiTor(object):
         self.logger.debug(f"Running With CMD Args: {cmd_args}")
 
         self.on_count = ctx.options.on_count
-        self.on_string = ctx.options.on_string.encode()
+        self.on_string = ctx.options.on_string
         self.on_regex = ctx.options.on_regex
         self.on_rst = ctx.options.on_rst
         self.on_error_code = ctx.options.on_error_code
