@@ -12,31 +12,23 @@ from time import sleep
 from shutil import rmtree
 from mitmproxy import ctx
 from tempfile import mkdtemp
-from mitmproxy.http import HTTPResponse
+from mitmproxy.http import Response
 from mitmproxy.tools.main import mitmdump
 from multiprocessing.pool import ThreadPool
 from stem.control import Controller, Signal
 from requests.exceptions import ConnectionError
-from stem.process import launch_tor_with_config
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from stem.process import launch_tor_with_config, DEFAULT_INIT_TIMEOUT
 
-__version__ = '3.2.0'
+__version__ = "4.0.0"
 
 
 def is_windows():
-    return platform.system().lower() == 'windows'
+    return platform.system().lower() == "windows"
 
 
 def monkey_patch():
     _log_mitmproxy = logging.getLogger("mitmproxy")
-
-    # Patch mitmproxy.log.Log.__call__
-    from mitmproxy import log
-
-    def _log__call__(self, text, level="info"):
-        getattr(_log_mitmproxy, level)(text)
-
-    setattr(log.Log, "__call__", _log__call__)
 
     # Patch mitmproxy.addons.termlog.log
     from mitmproxy.addons import termlog
@@ -63,10 +55,12 @@ def monkey_patch():
 
 
 class Tor(object):
-    def __init__(self, cmd='tor', config="{}"):
+    def __init__(self, cmd="tor", config=None, timeout=DEFAULT_INIT_TIMEOUT, tries=5):
         self.logger = logging.getLogger(__name__)
         self.tor_cmd = cmd
         self.tor_config = config or {}
+        self.tor_timeout = timeout
+        self.tries = tries
         self.socks_port = self.free_port()
         self.control_port = self.free_port()
         self.data_directory = mkdtemp()
@@ -86,18 +80,26 @@ class Tor(object):
 
     def run(self):
         self.logger.debug(f"[{self.id:05d}] Executing Tor Process")
-        self.process = launch_tor_with_config(
-            config={
-                "ControlPort": str(self.control_port),
-                "SOCKSPort": str(self.socks_port),
-                "DataDirectory": self.data_directory,
-                "AllowSingleHopCircuits": "1",
-                "ExcludeSingleHopRelays": "0",
-                **self.tor_config
-            },
-            tor_cmd=self.tor_cmd,
-            init_msg_handler=self.print_bootstrapped_line
-        )
+        for i in range(self.tries):
+            try:
+                self.process = launch_tor_with_config(
+                    config={
+                        "ControlPort": str(self.control_port),
+                        "SOCKSPort": str(self.socks_port),
+                        "DataDirectory": self.data_directory,
+                        "AllowSingleHopCircuits": "1",
+                        "ExcludeSingleHopRelays": "0",
+                        **self.tor_config
+                    },
+                    tor_cmd=self.tor_cmd,
+                    timeout=self.tor_timeout,
+                    init_msg_handler=self.print_bootstrapped_line
+                )
+                break
+            except Exception as error:
+                self.logger.debug(
+                    f"[{self.id:05d}] Tor Process Execution Failed With The Error ({i + 1}/{self.tries}): {repr(error)}"
+                )
 
         self.logger.debug(f"[{self.id:05d}] Creating Tor Controller")
         self.controller = Controller.from_port(port=self.control_port)
@@ -148,7 +150,7 @@ class Tor(object):
         Taken from selenium python.
         """
         free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        free_socket.bind(('0.0.0.0', 0))
+        free_socket.bind(("0.0.0.0", 0))
         free_socket.listen(5)
         port = free_socket.getsockname()[1]
         free_socket.close()
@@ -156,17 +158,16 @@ class Tor(object):
 
 
 class MultiTor(object):
-    def __init__(self, size=2, cmd='tor', config=None):
+    def __init__(self, size=2, cmd="tor", config=None, timeout=DEFAULT_INIT_TIMEOUT, tries=5):
         self.logger = logging.getLogger(__name__)
         self.cmd = cmd
+        self.timeout = timeout
+        self.tries = tries
         self.size = size
         self.list = []
         self.cycle = None
         self.current = None
-        try:
-            self.config = self.parse_config(config)
-        except Exception as error:
-            print(error, config, type(config))
+        self.config = self.parse_config(config)
 
     def parse_config(self, config=None):
         config = config or {}
@@ -176,34 +177,46 @@ class MultiTor(object):
             if isinstance(config, dict):
                 cfg = config
             elif path.isfile(config):
-                with open(config, encoding='utf-8') as cfg_file:
+                with open(config, encoding="utf-8") as cfg_file:
                     json.load(cfg_file)
             else:
                 cfg = json.loads(config)
         except (TypeError, json.JSONDecodeError):
-            self.logger.error(f"Could Not Parse Extended JSON Configuration {repr(config)}")
+            self.logger.error(f"Could Not Parse Extended JSON Configuration: {repr(config)}")
             return {}
         except Exception as error:
-            self.logger.error(f"Got Unknown Error {error}")
+            self.logger.error(f"Tor Configuration Parsing Error: {repr(error)}")
             return {}
 
         # Remove Port / Data Configurations
-        cfg.pop('ControlPort', None)
-        cfg.pop('SOCKSPort', None)
-        cfg.pop('DataDirectory', None)
+        cfg.pop("ControlPort", None)
+        cfg.pop("SOCKSPort", None)
+        cfg.pop("DataDirectory", None)
 
-        self.logger.debug(f"Extended Configuration: {json.dumps(cfg)}")
+        self.logger.debug(f"Tor Extended Configuration: {json.dumps(cfg)}")
         return cfg
 
     def run(self):
         self.logger.info(f"Executing {self.size} Tor Processes")
 
         # If OS Platform Is Windows Run Processes Async
+        timeout = self.timeout
+        map_func = map
         if is_windows():
             pool = ThreadPool(processes=self.size)
-            self.list = pool.map(lambda _: Tor(cmd=self.cmd, config=self.config).run(), range(self.size))
-        else:
-            self.list = [Tor(cmd=self.cmd).run() for _ in range(self.size)]
+            map_func = pool.map
+            # Feature Won't Work In Windows
+            timeout = DEFAULT_INIT_TIMEOUT
+
+        self.list = map_func(
+            func=lambda _: Tor(
+                cmd=self.cmd,
+                config=self.config,
+                timeout=timeout,
+                tries=self.tries,
+            ).run(),
+            iterable=range(self.size)
+        )
 
         self.logger.info("All Tor Processes Executed Successfully")
         self.cycle = itertools.cycle(self.list)
@@ -211,8 +224,8 @@ class MultiTor(object):
 
     @property
     def proxy(self):
-        proxy_url = f'socks5://127.0.0.1:{self.current.socks_port:d}'
-        return {'http': proxy_url, 'https': proxy_url}
+        proxy_url = f"socks5://127.0.0.1:{self.current.socks_port:d}"
+        return {"http": proxy_url, "https": proxy_url}
 
     def new_identity(self):
         identity_changed = False
@@ -240,11 +253,12 @@ class PyMultiTor(object):
         self.on_string = ""
         self.on_regex = ""
         self.on_rst = False
-        self.on_error_code = 0
+        self.on_status_code = 0
 
         self.multitor = None
 
-    def load(self, loader):
+    @staticmethod
+    def load(loader):
         # MultiTor Configuration
         loader.add_option(
             name="tor_processes",
@@ -255,7 +269,7 @@ class PyMultiTor(object):
         loader.add_option(
             name="tor_cmd",
             typespec=str,
-            default='tor',
+            default="tor",
             help="tor cmd (executable path + arguments)",
         )
         loader.add_option(
@@ -263,6 +277,18 @@ class PyMultiTor(object):
             typespec=str,
             default="{}",
             help="tor extended json configuration",
+        )
+        loader.add_option(
+            name="tor_timeout",
+            typespec=int,
+            default=DEFAULT_INIT_TIMEOUT,
+            help="number of seconds before our attempt to start a tor instance timed out",
+        )
+        loader.add_option(
+            name="tor_tries",
+            typespec=int,
+            default=5,
+            help="number tries to execute tor instance before it fails",
         )
 
         # When To Change IP Address
@@ -291,7 +317,7 @@ class PyMultiTor(object):
             help="change ip when connection closed with tcp rst",
         )
         loader.add_option(
-            name="on_error_code",
+            name="on_status_code",
             typespec=int,
             default=0,
             help="change ip when a specific status code returned",
@@ -299,9 +325,9 @@ class PyMultiTor(object):
 
     def configure(self, updates):
         # Configure Logger
-        logging.basicConfig(level=logging.DEBUG if ctx.options.termlog_verbosity.lower() == 'debug' else logging.INFO,
-                            format='%(asctime)s %(levelname)-8s %(message)s',
-                            datefmt='%d-%m-%y %H:%M:%S')
+        logging.basicConfig(level=logging.DEBUG if ctx.options.termlog_verbosity.lower() == "debug" else logging.INFO,
+                            format="%(asctime)s %(levelname)-8s %(message)s",
+                            datefmt="%d-%m-%y %H:%M:%S")
 
         # Disable Loggers
         monkey_patch()
@@ -316,14 +342,16 @@ class PyMultiTor(object):
         self.on_string = ctx.options.on_string
         self.on_regex = ctx.options.on_regex
         self.on_rst = ctx.options.on_rst
-        self.on_error_code = ctx.options.on_error_code
+        self.on_status_code = ctx.options.on_status_code
 
         self.insecure = ctx.options.ssl_insecure
 
         self.multitor = MultiTor(
             size=ctx.options.tor_processes,
             cmd=ctx.options.tor_cmd,
-            config=ctx.options.tor_config
+            config=ctx.options.tor_config,
+            timeout=ctx.options.tor_timeout,
+            tries=ctx.options.tor_tries,
         )
         try:
             self.multitor.run()
@@ -333,7 +361,7 @@ class PyMultiTor(object):
         atexit.register(self.multitor.shutdown)
 
         # Warn If No Change IP Configuration:
-        if not any([self.on_count, self.on_string, self.on_regex, self.on_rst, self.on_error_code]):
+        if not any([self.on_count, self.on_string, self.on_regex, self.on_rst, self.on_status_code]):
             self.logger.warning("Change IP Configuration Not Set (Acting As Regular Tor Proxy)")
 
     def create_response(self, request):
@@ -352,7 +380,7 @@ class PyMultiTor(object):
         if response.headers.get("Transfer-Encoding") == "chunked":
             response.headers.pop("Transfer-Encoding")
 
-        return HTTPResponse.make(
+        return Response.make(
             status_code=response.status_code,
             content=response.content,
             headers=dict(response.headers),
@@ -371,16 +399,17 @@ class PyMultiTor(object):
                 try:
                     flow.response = self.create_response(flow.request)
                 except Exception as error:
-                    error_message = f"Got Error: {error}"
+                    error_message = f"After TCP Rst Triggered, Got Response Error: {repr(error)}"
             else:
                 error_message = "Got TCP Rst, While TCP Rst Not Configured"
         except Exception as error:
-            error_message = f"Got Error: {error}"
+            error_message = f"Got Response Error: {repr(error)}"
 
         # When There Is No Response
         if error_message:
             self.logger.error(error_message)
-            flow.response = HTTPResponse.make(
+            # Set Error Response
+            flow.response = Response.make(
                 status_code=500,
                 content=error_message,
                 headers={
@@ -409,7 +438,7 @@ class PyMultiTor(object):
             self.multitor.new_identity()
 
         # If A Specific Status Code Returned
-        if self.on_error_code and self.on_error_code == flow.response.status_code:
+        if self.on_status_code and self.on_status_code == flow.response.status_code:
             self.logger.debug("Specific Status Code Returned")
             self.multitor.new_identity()
             # Set Response
@@ -435,14 +464,14 @@ def main(args=None):
                         default=8080)
     parser.add_argument("-s", "--socks",
                         help="use as socks proxy (not http proxy)",
-                        action='store_true')
+                        action="store_true")
     parser.add_argument("-a", "--auth",
                         help="set proxy authentication (format: 'username:pass')",
                         dest="auth",
                         default="")
     parser.add_argument("-i", "--insecure",
                         help="insecure ssl",
-                        action='store_true')
+                        action="store_true")
     parser.add_argument("-d", "--debug",
                         help="Debug Log.",
                         action="store_true")
@@ -461,6 +490,16 @@ def main(args=None):
                         help="tor extended json configuration",
                         dest="config",
                         default="{}")
+    parser.add_argument("-t", "--tor-timeout",
+                        help="number of seconds before our attempt to start a tor instance timed out",
+                        dest="timeout",
+                        type=int,
+                        default=DEFAULT_INIT_TIMEOUT)
+    parser.add_argument("-r", "--tor-tries",
+                        help="number tries to start a tor instance before it fails",
+                        dest="tries",
+                        type=int,
+                        default=5)
 
     # When To Change IP Address
     parser.add_argument("--on-count",
@@ -476,43 +515,45 @@ def main(args=None):
     parser.add_argument("--on-rst",
                         help="change ip when connection closed with tcp rst",
                         action="store_true")
-    parser.add_argument("--on-error-code",
+    parser.add_argument("--on-status-code",
                         help="change ip when a specific status code returned",
                         type=int,
                         default=0)
 
     sys_args = vars(parser.parse_args(args=args))
     mitmdump_args = [
-        '--scripts', __file__,
-        '--mode', 'socks5' if sys_args['socks'] else 'regular',
-        '--listen-host', sys_args['listen_host'],
-        '--listen-port', str(sys_args['listen_port']),
-        '--set', f'tor_cmd={sys_args["cmd"]}',
-        '--set', f'tor_config={sys_args["config"]}',
-        '--set', f'tor_processes={sys_args["processes"]}',
-        '--set', f'on_string={sys_args["on_string"]}',
-        '--set', f'on_regex={sys_args["on_regex"]}',
-        '--set', f'on_count={sys_args["on_count"]}',
-        '--set', f'on_error_code={sys_args["on_error_code"]}',
+        "--scripts", __file__,
+        "--mode", "socks5" if sys_args['socks'] else "regular",
+        "--listen-host", sys_args['listen_host'],
+        "--listen-port", str(sys_args['listen_port']),
+        "--set", f"tor_cmd={sys_args['cmd']}",
+        "--set", f"tor_config={sys_args['config']}",
+        "--set", f"tor_timeout={sys_args['timeout']}",
+        "--set", f"tor_tries={sys_args['tries']}",
+        "--set", f"tor_processes={sys_args['processes']}",
+        "--set", f"on_string={sys_args['on_string']}",
+        "--set", f"on_regex={sys_args['on_regex']}",
+        "--set", f"on_count={sys_args['on_count']}",
+        "--set", f"on_status_code={sys_args['on_status_code']}",
     ]
-    if sys_args['auth']:
+    if sys_args["auth"]:
         mitmdump_args.extend([
-            '--proxyauth', sys_args["auth"],
+            "--proxyauth", sys_args["auth"],
         ])
 
-    if sys_args['on_rst']:
+    if sys_args["on_rst"]:
         mitmdump_args.extend([
-            '--set', f'on_rst',
+            "--set", "on_rst",
         ])
 
-    if sys_args['debug']:
+    if sys_args["debug"]:
         mitmdump_args.extend([
-            '--verbose',
+            "--verbose",
         ])
 
-    if sys_args['insecure']:
+    if sys_args["insecure"]:
         mitmdump_args.extend([
-            '--ssl-insecure',
+            "--ssl-insecure",
         ])
     return mitmdump(args=mitmdump_args)
 

@@ -1,14 +1,16 @@
-FROM mitmproxy/mitmproxy:5.0.1
+FROM mitmproxy/mitmproxy:7.0.4
 
 # Create app directory
 WORKDIR /app
 
-
 # Bundle app source
-COPY pymultitor.py requirements.txt /app/
+COPY requirements.txt /app/
+RUN set -eux; \
+    \
+    apt-get update && apt-get install -y tor; \
+    pip install -r requirements.txt
 
-RUN apk update && apk add tor
-RUN pip install -r requirements.txt
+COPY pymultitor.py /app/
 
 EXPOSE 8080
 
