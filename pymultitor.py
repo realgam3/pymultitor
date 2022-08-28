@@ -199,16 +199,13 @@ class MultiTor(object):
     def run(self):
         self.logger.info(f"Executing {self.size} Tor Processes")
 
-        # If OS Platform Is Windows Run Processes Async
         timeout = self.timeout
-        map_func = map
         if is_windows():
-            pool = ThreadPool(processes=self.size)
-            map_func = pool.map
             # Feature Won't Work In Windows
             timeout = DEFAULT_INIT_TIMEOUT
 
-        self.list = map_func(
+        pool = ThreadPool(processes=self.size)
+        self.list = pool.map(
             func=lambda _: Tor(
                 cmd=self.cmd,
                 config=self.config,
