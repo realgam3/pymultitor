@@ -21,6 +21,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from stem.process import launch_tor_with_config, DEFAULT_INIT_TIMEOUT
 
 __version__ = "4.0.0"
+__author__ = 'Tomer Zait (realgam3)'
 
 
 def is_windows():
