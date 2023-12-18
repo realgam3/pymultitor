@@ -55,7 +55,7 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: Proxy Servers",
         "Topic :: Software Development :: Testing",
-        "Topic :: Software Development :: Libraries :: Python Modules"
+        "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     project_urls={
         'Source': "https://github.com/realgam3/pymultitor",

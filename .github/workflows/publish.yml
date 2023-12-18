@@ -1,0 +1,63 @@
+name: Build and Publish
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v[0-9]+.[0-9]+.*'  # Trigger on tags like v1.0, 2.3, etc.
+
+permissions:
+  contents: read
+
+jobs:
+  dockerhub-publish:
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'branch' || github.ref_type == 'tag'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        run: docker login -u "${{ secrets.USERNAME }}" -p "${{ secrets.TOKEN }}"
+
+      - name: Build Docker Image
+        run: |
+          DOCKER_IMAGE_TAG="${GITHUB_REPOSITORY}:${GITHUB_REF_NAME}"
+          docker build -t "$DOCKER_IMAGE_TAG" .
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+              docker tag "$DOCKER_IMAGE_TAG" "${GITHUB_REPOSITORY}:latest"
+          fi
+
+      - name: Publish Docker Image
+        run: |
+          DOCKER_IMAGE_TAG="${GITHUB_REPOSITORY}:${GITHUB_REF_NAME}"
+          docker push "$DOCKER_IMAGE_TAG"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+              docker push "${GITHUB_REPOSITORY}:latest"
+          fi
+
+  pypi-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    if: github.ref_type == 'tag'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel
+
+      - name: Build Python Package
+        run: python setup.py sdist bdist_wheel
+
+      - name: Publish Python Package
+        uses: pypa/gh-action-pypi-publish@release/v1
