@@ -1,5 +1,7 @@
 ## Overview
 
+![Logo](https://raw.githubusercontent.com/realgam3/pymultitor/v4.0.0/ext/pymultitor-logo.png)
+
 Python Multi Threaded Tor Proxy,  
 Did you ever want to be at two different places at the same time?  
 When I asked myself this question, I actually started developing this solution in my mind.  
@@ -16,7 +18,7 @@ attacks to bypass Web Application Firewalls, Brute-Force type attacks and many m
 
 ### Prerequisites
 
-* Python 3.6+.
+* Python 3.10+.
 * mitmproxy (https://mitmproxy.org/).
 * tor.
     * On Ubuntu / Kali, `sudo apt install -y tor`
@@ -68,21 +70,46 @@ Bug reports on installation issues are welcome!
 2. On your script use proxy (`http://127.0.0.1:8080`).  
    When the string `Your IP Address Blocked` will present in the response content, you will exit from another IP address.  
 
+### Docker Usage
+
+1. Run `docker run --rm -p8080:8080 realgam3/pymultitor --on-string "Your IP Address Blocked"`.  
+2. On your script use proxy (`http://127.0.0.1:8080`).  
+   When the string `Your IP Address Blocked` will present in the response content, you will exit from another IP address.  
+
+
 ### Command Line Flags
 
 See `--help` for the complete list, but in short:
 
-```bash
-usage: pymultitor.py [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s]
-                     [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG]
-                     [-t TIMEOUT] [-r TRIES] [--on-count ON_COUNT]
-                     [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst]
-                     [--on-status-code ON_STATUS_CODE]
+```text
+usage: pymultitor [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG] [-t TIMEOUT] [-r TRIES] [--on-count ON_COUNT] [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst] [--on-status-code ON_STATUS_CODE]
 
-# Trigger To Change IP Address
---on-count        change ip every x requests (resources also counted)
---on-string       change ip when string found in the response content
---on-regex        change ip when regex found in The response content
---on-rst          change ip when connection closed with tcp rst
---on-status-code  change ip when a specific status code returned
+options:
+  -h, --help            show this help message and exit
+  -v, --version         show program's version number and exit
+  -lh LISTEN_HOST, --host LISTEN_HOST
+                        proxy listen host. (default: 127.0.0.1)
+  -lp LISTEN_PORT, --port LISTEN_PORT
+                        proxy listen port (default: 8080)
+  -s, --socks           use as socks proxy (not http proxy) (default: False)
+  -a AUTH, --auth AUTH  set proxy authentication (format: 'username:pass') (default: )
+  -i, --insecure        insecure ssl (default: False)
+  -d, --debug           Debug Log. (default: False)
+  -p PROCESSES, --tor-processes PROCESSES
+                        number of tor processes in the cycle (default: 2)
+  -c CMD, --tor-cmd CMD
+                        tor cmd (executable path + arguments) (default: tor)
+  -e CONFIG, --tor-config CONFIG
+                        tor extended json configuration (default: {})
+  -t TIMEOUT, --tor-timeout TIMEOUT
+                        number of seconds before our attempt to start a tor instance timed out (default: 90)
+  -r TRIES, --tor-tries TRIES
+                        number tries to start a tor instance before it fails (default: 5)
+  --on-count ON_COUNT   change ip every x requests (resources also counted) (default: 0)
+  --on-string ON_STRING
+                        change ip when string found in the response content (default: )
+  --on-regex ON_REGEX   change ip when regex found in The response content (default: )
+  --on-rst              change ip when connection closed with tcp rst (default: False)
+  --on-status-code ON_STATUS_CODE
+                        change ip when a specific status code returned (default: 0)
 ```
