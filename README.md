@@ -37,19 +37,19 @@ attacks to bypass Web Application Firewalls, Brute-Force type attacks and many m
 
 ### From pip
 
-```sh
+```shell
 pip3 install pymultitor
 ```
 
 ### From Docker
 
-```sh
+```shell
 docker pull realgam3/pymultitor
 ```
 
 ### From Source
 
-```sh
+```shell
 git clone https://github.com/realgam3/pymultitor.git
 cd pymultitor
 
@@ -79,9 +79,11 @@ Bug reports on installation issues are welcome!
    When the string `Your IP Address Blocked` will present in the response content, you will exit from another IP address.  
 
 
-### Command Line Flags
+### Command Line Arguments
 
-See `--help` for the complete list, but in short:
+```shell
+pymultitor --help
+```
 
 ```text
 usage: pymultitor [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG] [-t TIMEOUT] [-r TRIES] [--on-count ON_COUNT] [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst] [--on-status-code ON_STATUS_CODE]
