@@ -1,4 +1,5 @@
-## Overview
+## PyMultiTor
+
 [![PyPI version](https://img.shields.io/pypi/v/pymultitor)](https://pypi.org/project/pymultitor/)
 [![Downloads](https://pepy.tech/badge/pymultitor)](https://pepy.tech/project/pymultitor)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pymultitor)  
@@ -34,19 +35,17 @@ attacks to bypass Web Application Firewalls, Brute-Force type attacks and many m
           example: `pymultitor --tor-cmd "c:\Pentest\Web\tor-win32-0.2.9.9\Tor\tor.exe"`)
     * On MacOS, `brew install tor`
 
-### From Docker
-
-```sh
-docker run -d -p 8080:8080 --rm realgam3/pymultitor --tor-processes 4 --on-string "Your IP Address Blocked"
-```
-
 ### From pip
 
 ```sh
 pip3 install pymultitor
 ```
 
-You may need to use `sudo`, depending on your Python installation.
+### From Docker
+
+```sh
+docker pull realgam3/pymultitor
+```
 
 ### From Source
 
@@ -75,7 +74,7 @@ Bug reports on installation issues are welcome!
 
 ### Docker Usage
 
-1. Run `docker run --rm -p8080:8080 realgam3/pymultitor --on-string "Your IP Address Blocked"`.  
+1. Run `docker run --rm -p 8080:8080 realgam3/pymultitor --on-string "Your IP Address Blocked"`.  
 2. On your script use proxy (`http://127.0.0.1:8080`).  
    When the string `Your IP Address Blocked` will present in the response content, you will exit from another IP address.  
 
