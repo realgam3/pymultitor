@@ -1,6 +1,7 @@
 ## Overview
-
-![Logo](https://raw.githubusercontent.com/realgam3/pymultitor/v4.0.0/ext/pymultitor-logo.png)
+[![PyPI version](https://img.shields.io/pypi/v/pymultitor)](https://pypi.org/project/pymultitor/)
+[![Downloads](https://pepy.tech/badge/pymultitor)](https://pepy.tech/project/pymultitor)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pymultitor)  
 
 Python Multi Threaded Tor Proxy,  
 Did you ever want to be at two different places at the same time?  
@@ -13,6 +14,8 @@ attacks to bypass Web Application Firewalls, Brute-Force type attacks and many m
 [Blackhat Asia] https://www.blackhat.com/asia-17/arsenal.html#pymultitor  
 [Owasp-IL Presentation] https://www.owasp.org/images/3/3d/OWASPIL-2016-02-02_PyMultiTor_TomerZait.pdf  
 [DigitalWhisper Article (Hebrew)] http://www.digitalwhisper.co.il/files/Zines/0x2E/DW46-3-PyMultitor.pdf
+
+![Logo](https://raw.githubusercontent.com/realgam3/pymultitor/v4.0.0/ext/pymultitor-logo.png)
 
 ## Installation
 
