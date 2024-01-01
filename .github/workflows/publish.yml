@@ -13,6 +13,7 @@ permissions:
 jobs:
   dockerhub-publish:
     runs-on: ubuntu-latest
+    environment: release
     if: github.ref_type == 'branch' || github.ref_type == 'tag'
     steps:
       - name: Checkout code
@@ -39,6 +40,7 @@ jobs:
 
   pypi-publish:
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       id-token: write
     if: github.ref_type == 'tag'
