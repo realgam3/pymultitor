@@ -16,7 +16,7 @@ attacks to bypass Web Application Firewalls, Brute-Force type attacks and many m
 [Owasp-IL Presentation] https://www.owasp.org/images/3/3d/OWASPIL-2016-02-02_PyMultiTor_TomerZait.pdf  
 [DigitalWhisper Article (Hebrew)] http://www.digitalwhisper.co.il/files/Zines/0x2E/DW46-3-PyMultitor.pdf
 
-![Logo](https://raw.githubusercontent.com/realgam3/pymultitor/main/assets/img/pymultitor-logo.png)
+![Logo](https://raw.githubusercontent.com/realgam3/pymultitor/master/assets/img/pymultitor-logo.png)
 
 ## Installation
 
