@@ -94,7 +94,7 @@ class Tor(object):
                         **self.tor_config
                     },
                     tor_cmd=self.tor_cmd,
-                    timeout=self.tor_timeout,
+                    timeout=self.tor_timeout if self.tor_timeout != 0 else None,
                     init_msg_handler=self.print_bootstrapped_line
                 )
                 break
@@ -281,7 +281,7 @@ class PyMultiTor(object):
             name="tor_timeout",
             typespec=int,
             default=DEFAULT_INIT_TIMEOUT,
-            help="number of seconds before our attempt to start a tor instance timed out",
+            help="timeout in seconds for starting a tor instance; 0 disables timeout",
         )
         loader.add_option(
             name="tor_tries",
@@ -490,7 +490,7 @@ def main(args=None):
                         dest="config",
                         default="{}")
     parser.add_argument("-t", "--tor-timeout",
-                        help="number of seconds before our attempt to start a tor instance timed out",
+                        help="timeout in seconds for starting a tor instance; 0 disables timeout",
                         dest="timeout",
                         type=int,
                         default=DEFAULT_INIT_TIMEOUT)

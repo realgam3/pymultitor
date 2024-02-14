@@ -108,7 +108,7 @@ options:
   -e CONFIG, --tor-config CONFIG
                         tor extended json configuration (default: {})
   -t TIMEOUT, --tor-timeout TIMEOUT
-                        number of seconds before our attempt to start a tor instance timed out (default: 90)
+                        timeout in seconds for starting a tor instance; 0 disables timeout (default: 90)
   -r TRIES, --tor-tries TRIES
                         number tries to start a tor instance before it fails (default: 5)
   --on-count ON_COUNT   change ip every x requests (resources also counted) (default: 0)
