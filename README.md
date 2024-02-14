@@ -86,7 +86,9 @@ pymultitor --help
 ```
 
 ```text
-usage: pymultitor [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG] [-t TIMEOUT] [-r TRIES] [--on-count ON_COUNT] [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst] [--on-status-code ON_STATUS_CODE]
+usage: pymultitor [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG] [-t TIMEOUT]
+                  [-r TRIES] [--on-count ON_COUNT] [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst]
+                  [--on-status-code [ON_STATUS_CODE ...]]
 
 options:
   -h, --help            show this help message and exit
@@ -114,6 +116,6 @@ options:
                         change ip when string found in the response content (default: )
   --on-regex ON_REGEX   change ip when regex found in The response content (default: )
   --on-rst              change ip when connection closed with tcp rst (default: False)
-  --on-status-code ON_STATUS_CODE
-                        change ip when a specific status code returned (default: 0)
+  --on-status-code [ON_STATUS_CODE ...]
+                        change ip when one of the specified status codes is returned (default: [])
 ```

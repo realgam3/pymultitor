@@ -13,6 +13,7 @@ from shutil import rmtree
 from mitmproxy import ctx
 from tempfile import mkdtemp
 from mitmproxy.http import Response
+from collections.abc import Sequence
 from mitmproxy.tools.main import mitmdump
 from multiprocessing.pool import ThreadPool
 from stem.control import Controller, Signal
@@ -251,7 +252,7 @@ class PyMultiTor(object):
         self.on_string = ""
         self.on_regex = ""
         self.on_rst = False
-        self.on_status_code = 0
+        self.on_status_code = []
 
         self.multitor = None
 
@@ -316,9 +317,9 @@ class PyMultiTor(object):
         )
         loader.add_option(
             name="on_status_code",
-            typespec=int,
-            default=0,
-            help="change ip when a specific status code returned",
+            typespec=Sequence[str],
+            default=[],
+            help="change ip when one of the specified status codes is returned",
         )
 
     def configure(self, updates):
@@ -340,7 +341,7 @@ class PyMultiTor(object):
         self.on_string = ctx.options.on_string
         self.on_regex = ctx.options.on_regex
         self.on_rst = ctx.options.on_rst
-        self.on_status_code = ctx.options.on_status_code
+        self.on_status_code = [int(x) for x in ctx.options.on_status_code]
 
         self.insecure = ctx.options.ssl_insecure
 
@@ -436,7 +437,7 @@ class PyMultiTor(object):
             self.multitor.new_identity()
 
         # If A Specific Status Code Returned
-        if self.on_status_code and self.on_status_code == flow.response.status_code:
+        if flow.response.status_code in self.on_status_code:
             self.logger.debug("Specific Status Code Returned")
             self.multitor.new_identity()
             # Set Response
@@ -514,9 +515,10 @@ def main(args=None):
                         help="change ip when connection closed with tcp rst",
                         action="store_true")
     parser.add_argument("--on-status-code",
-                        help="change ip when a specific status code returned",
+                        help="change ip when one of the specified status codes is returned",
                         type=int,
-                        default=0)
+                        nargs='*',
+                        default=[])
 
     sys_args = vars(parser.parse_args(args=args))
     mitmdump_args = [
@@ -532,8 +534,13 @@ def main(args=None):
         "--set", f"on_string={sys_args['on_string']}",
         "--set", f"on_regex={sys_args['on_regex']}",
         "--set", f"on_count={sys_args['on_count']}",
-        "--set", f"on_status_code={sys_args['on_status_code']}",
     ]
+
+    for status_code in sys_args["on_status_code"]:
+        mitmdump_args.extend([
+            "--set", f"on_status_code={status_code}",
+        ])
+
     if sys_args["auth"]:
         mitmdump_args.extend([
             "--proxyauth", sys_args["auth"],
