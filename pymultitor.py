@@ -245,6 +245,7 @@ class PyMultiTor(object):
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.insecure = False
+        self.request_timeout = 0
 
         # Change IP Policy (Configuration)
         self.counter = itertools.count()
@@ -288,6 +289,12 @@ class PyMultiTor(object):
             typespec=int,
             default=5,
             help="number tries to execute tor instance before it fails",
+        )
+        loader.add_option(
+            name="request_timeout",
+            typespec=int,
+            default=0,
+            help="timeout in seconds for http requests; 0 disables timeout",
         )
 
         # When To Change IP Address
@@ -344,6 +351,7 @@ class PyMultiTor(object):
         self.on_status_code = [int(x) for x in ctx.options.on_status_code]
 
         self.insecure = ctx.options.ssl_insecure
+        self.request_timeout = ctx.options.request_timeout
 
         self.multitor = MultiTor(
             size=ctx.options.tor_processes,
@@ -372,7 +380,8 @@ class PyMultiTor(object):
             allow_redirects=False,
             verify=not self.insecure,
             proxies=self.multitor.proxy,
-            stream=False
+            stream=False,
+            timeout=self.request_timeout if self.request_timeout != 0 else None,
         )
 
         # Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2.
@@ -499,6 +508,11 @@ def main(args=None):
                         dest="tries",
                         type=int,
                         default=5)
+    parser.add_argument("--request-timeout",
+                        help="timeout in seconds for http requests; 0 disables timeout",
+                        dest="request_timeout",
+                        type=int,
+                        default=0)
 
     # When To Change IP Address
     parser.add_argument("--on-count",
@@ -531,6 +545,7 @@ def main(args=None):
         "--set", f"tor_timeout={sys_args['timeout']}",
         "--set", f"tor_tries={sys_args['tries']}",
         "--set", f"tor_processes={sys_args['processes']}",
+        "--set", f"request_timeout={sys_args['request_timeout']}",
         "--set", f"on_string={sys_args['on_string']}",
         "--set", f"on_regex={sys_args['on_regex']}",
         "--set", f"on_count={sys_args['on_count']}",
