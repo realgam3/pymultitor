@@ -245,6 +245,7 @@ class PyMultiTor(object):
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.insecure = False
+        self.request_timeout = 0
 
         # Change IP Policy (Configuration)
         self.counter = itertools.count()
@@ -253,6 +254,7 @@ class PyMultiTor(object):
         self.on_regex = ""
         self.on_rst = False
         self.on_status_code = []
+        self.on_timeout = False
 
         self.multitor = None
 
@@ -289,6 +291,12 @@ class PyMultiTor(object):
             default=5,
             help="number tries to execute tor instance before it fails",
         )
+        loader.add_option(
+            name="request_timeout",
+            typespec=int,
+            default=0,
+            help="timeout in seconds for http requests; 0 disables timeout",
+        )
 
         # When To Change IP Address
         loader.add_option(
@@ -321,6 +329,12 @@ class PyMultiTor(object):
             default=[],
             help="change ip when one of the specified status codes is returned",
         )
+        loader.add_option(
+            name="on_timeout",
+            typespec=bool,
+            default=False,
+            help="change ip when request times out",
+        )
 
     def configure(self, updates):
         # Configure Logger
@@ -342,8 +356,10 @@ class PyMultiTor(object):
         self.on_regex = ctx.options.on_regex
         self.on_rst = ctx.options.on_rst
         self.on_status_code = [int(x) for x in ctx.options.on_status_code]
+        self.on_timeout = ctx.options.on_timeout
 
         self.insecure = ctx.options.ssl_insecure
+        self.request_timeout = ctx.options.request_timeout
 
         self.multitor = MultiTor(
             size=ctx.options.tor_processes,
@@ -360,7 +376,7 @@ class PyMultiTor(object):
         atexit.register(self.multitor.shutdown)
 
         # Warn If No Change IP Configuration:
-        if not any([self.on_count, self.on_string, self.on_regex, self.on_rst, self.on_status_code]):
+        if not any([self.on_count, self.on_string, self.on_regex, self.on_rst, self.on_status_code, self.on_timeout]):
             self.logger.warning("Change IP Configuration Not Set (Acting As Regular Tor Proxy)")
 
     def create_response(self, request):
@@ -372,7 +388,8 @@ class PyMultiTor(object):
             allow_redirects=False,
             verify=not self.insecure,
             proxies=self.multitor.proxy,
-            stream=False
+            stream=False,
+            timeout=self.request_timeout if self.request_timeout != 0 else None,
         )
 
         # Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2.
@@ -401,6 +418,18 @@ class PyMultiTor(object):
                     error_message = f"After TCP Rst Triggered, Got Response Error: {repr(error)}"
             else:
                 error_message = "Got TCP Rst, While TCP Rst Not Configured"
+        except requests.exceptions.Timeout:
+            # If Timeout Configured
+            if self.on_timeout:
+                self.logger.debug("Request Timeout, While Timeout Configured")
+                self.multitor.new_identity()
+                # Set Response
+                try:
+                    flow.response = self.create_response(flow.request)
+                except Exception as error:
+                    error_message = f"After Timeout Triggered, Got Response Error: {repr(error)}"
+            else:
+                error_message = "Request Timeout, While Timeout Not Configured"
         except Exception as error:
             error_message = f"Got Response Error: {repr(error)}"
 
@@ -417,7 +446,7 @@ class PyMultiTor(object):
             )
             return
 
-            # If String Found In Response Content
+        # If String Found In Response Content
         if self.on_string and self.on_string in flow.response.text:
             self.logger.debug("String Found In Response Content")
             self.multitor.new_identity()
@@ -499,6 +528,11 @@ def main(args=None):
                         dest="tries",
                         type=int,
                         default=5)
+    parser.add_argument("--request-timeout",
+                        help="timeout in seconds for http requests; 0 disables timeout",
+                        dest="request_timeout",
+                        type=int,
+                        default=0)
 
     # When To Change IP Address
     parser.add_argument("--on-count",
@@ -519,6 +553,9 @@ def main(args=None):
                         type=int,
                         nargs='*',
                         default=[])
+    parser.add_argument("--on-timeout",
+                        help="change ip when request times out",
+                        action="store_true")
 
     sys_args = vars(parser.parse_args(args=args))
     mitmdump_args = [
@@ -531,6 +568,7 @@ def main(args=None):
         "--set", f"tor_timeout={sys_args['timeout']}",
         "--set", f"tor_tries={sys_args['tries']}",
         "--set", f"tor_processes={sys_args['processes']}",
+        "--set", f"request_timeout={sys_args['request_timeout']}",
         "--set", f"on_string={sys_args['on_string']}",
         "--set", f"on_regex={sys_args['on_regex']}",
         "--set", f"on_count={sys_args['on_count']}",
@@ -549,6 +587,11 @@ def main(args=None):
     if sys_args["on_rst"]:
         mitmdump_args.extend([
             "--set", "on_rst",
+        ])
+
+    if sys_args["on_timeout"]:
+        mitmdump_args.extend([
+            "--set", "on_timeout",
         ])
 
     if sys_args["debug"]:
