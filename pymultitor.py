@@ -24,7 +24,7 @@ from requests.exceptions import ConnectionError
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from stem.process import launch_tor_with_config, DEFAULT_INIT_TIMEOUT
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 __author__ = 'Tomer Zait (realgam3)'
 
 app = Flask("pymultitor")
@@ -621,8 +621,8 @@ def main(args=None):
     return mitmdump(args=mitmdump_args)
 
 
-@app.route("/status")
-def hello_world() -> Response:
+@app.get("/status")
+def status() -> Response:
     is_running = False
     if pymultitor.multitor:
         is_running = all([
@@ -632,6 +632,23 @@ def hello_world() -> Response:
 
     return jsonify({
         "status": "running" if is_running else "stopped",
+    })
+
+
+@app.post("/identity")
+def identity() -> Response:
+    if not pymultitor.multitor:
+        return jsonify({
+            "message": "pymultitor not running",
+            "success": False,
+        })
+
+    pymultitor.logger.debug("API Requesting New Identity")
+    tor = pymultitor.multitor.current
+    res = tor.newnym()
+    return jsonify({
+        "message": "new identity requested",
+        "success": res,
     })
 
 
