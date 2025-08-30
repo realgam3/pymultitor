@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 import json
@@ -12,8 +13,10 @@ from time import sleep
 from shutil import rmtree
 from mitmproxy import ctx
 from tempfile import mkdtemp
+from flask import Flask, jsonify
 from mitmproxy.http import Response
 from collections.abc import Sequence
+from mitmproxy.addons import asgiapp
 from mitmproxy.tools.main import mitmdump
 from multiprocessing.pool import ThreadPool
 from stem.control import Controller, Signal
@@ -21,8 +24,11 @@ from requests.exceptions import ConnectionError
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from stem.process import launch_tor_with_config, DEFAULT_INIT_TIMEOUT
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 __author__ = 'Tomer Zait (realgam3)'
+
+app = Flask("pymultitor")
+token = os.getenv("PYMULTITOR_TOKEN", os.urandom(32).hex())
 
 
 def is_windows():
@@ -69,6 +75,7 @@ class Tor(object):
         self.id = self.socks_port
         self.process = None
         self.controller = None
+        self._is_running = False
         self.__is_shutdown = False
 
     def __del__(self):
@@ -113,6 +120,7 @@ class Tor(object):
         if self.__is_shutdown:
             return
 
+        self._is_running = False
         self.__is_shutdown = True
         self.logger.debug(f"[{self.id:05d}] Destroying Tor")
         self.controller.close()
@@ -143,6 +151,7 @@ class Tor(object):
             self.logger.debug(f"[{self.id:05d}] Tor Bootstrapped Line: {line}")
 
             if "100%" in line:
+                self._is_running = True
                 self.logger.debug(f"[{self.id:05d}] Tor Process Executed Successfully")
 
     @staticmethod
@@ -361,6 +370,8 @@ class PyMultiTor(object):
         self.insecure = ctx.options.ssl_insecure
         self.request_timeout = ctx.options.request_timeout
 
+        self.logger.info(f"PyMultiTor Token: {token}")
+
         self.multitor = MultiTor(
             size=ctx.options.tor_processes,
             cmd=ctx.options.tor_cmd,
@@ -403,6 +414,10 @@ class PyMultiTor(object):
         )
 
     def request(self, flow):
+        auth = flow.request.headers.get("Proxy-Authorization", "").split(" ", 2)
+        if flow.request.host in ["pymultitor"] and len(auth) == 2 and auth[1] == token:
+            return
+
         error_message = None
         try:
             flow.response = self.create_response(flow.request)
@@ -606,8 +621,41 @@ def main(args=None):
     return mitmdump(args=mitmdump_args)
 
 
+@app.get("/status")
+def status() -> Response:
+    is_running = False
+    if pymultitor.multitor:
+        is_running = all([
+            tor._is_running
+            for tor in pymultitor.multitor.list
+        ])
+
+    return jsonify({
+        "status": "running" if is_running else "stopped",
+    })
+
+
+@app.post("/identity")
+def identity() -> Response:
+    if not pymultitor.multitor:
+        return jsonify({
+            "message": "pymultitor not running",
+            "success": False,
+        })
+
+    pymultitor.logger.debug("API Requesting New Identity")
+    tor = pymultitor.multitor.current
+    res = tor.newnym()
+    return jsonify({
+        "message": "new identity requested",
+        "success": res,
+    })
+
+
+pymultitor = PyMultiTor()
 addons = [
-    PyMultiTor()
+    asgiapp.WSGIApp(app, "pymultitor", 80),
+    pymultitor,
 ]
 
 if __name__ == "__main__":

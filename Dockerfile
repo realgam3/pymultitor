@@ -1,4 +1,4 @@
-FROM mitmproxy/mitmproxy:10.1.6
+FROM mitmproxy/mitmproxy:12.1
 
 # Create app directory
 WORKDIR /app

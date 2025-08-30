@@ -78,6 +78,50 @@ Bug reports on installation issues are welcome!
 2. On your script use proxy (`http://127.0.0.1:8080`).  
    When the string `Your IP Address Blocked` will present in the response content, you will exit from another IP address.  
 
+### API Usage
+
+PyMultiTor provides a REST API for managing proxy identities. You can use the API to change your proxy identity on demand.
+
+#### Authentication
+
+The API requires authentication using a Bearer token. You can set the token in two ways:
+
+1. **Environment Variable**: Set the `PYMULTITOR_TOKEN` environment variable:
+   ```bash
+   export PYMULTITOR_TOKEN="your-secret-token-here"
+   ```
+   **Note**: If `PYMULTITOR_TOKEN` is not set, PyMultiTor will automatically generate a random token for you.
+
+2. **Command Line**: Use the `--auth` parameter when starting PyMultiTor:
+   ```bash
+   pymultitor --auth "username:your-secret-token-here"
+   ```
+
+#### Endpoints
+
+**Change Identity**
+- **URL**: `/identity`
+- **Method**: `POST`
+
+**Example Usage**:
+```bash
+curl http://pymultitor/identity -X POST \
+  --header "Proxy-Authorization: Bearer {Token}" \
+  --proxy http://localhost:8080
+```
+
+**Status**
+- **URL**: `/status`
+- **Method**: `GET`
+
+**Example Usage**:
+```bash
+curl http://pymultitor/status \
+  --header "Proxy-Authorization: Bearer {Token}" \
+  --proxy http://localhost:8080
+```
+
+**Note**: Replace `{Token}` with your actual authentication token.
 
 ### Command Line Arguments
 
@@ -86,31 +130,32 @@ pymultitor --help
 ```
 
 ```text
-usage: pymultitor [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG] [-t TIMEOUT]
-                  [-r TRIES] [--on-count ON_COUNT] [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst]
-                  [--on-status-code [ON_STATUS_CODE ...]]
+usage: pymultitor.py [-h] [-v] [-lh LISTEN_HOST] [-lp LISTEN_PORT] [-s] [-a AUTH] [-i] [-d] [-p PROCESSES] [-c CMD] [-e CONFIG] [-t TIMEOUT] [-r TRIES]
+                     [--request-timeout REQUEST_TIMEOUT] [--on-count ON_COUNT] [--on-string ON_STRING] [--on-regex ON_REGEX] [--on-rst] [--on-status-code [ON_STATUS_CODE ...]]
+                     [--on-timeout]
 
 options:
   -h, --help            show this help message and exit
   -v, --version         show program's version number and exit
-  -lh LISTEN_HOST, --host LISTEN_HOST
+  -lh, --host LISTEN_HOST
                         proxy listen host. (default: 127.0.0.1)
-  -lp LISTEN_PORT, --port LISTEN_PORT
+  -lp, --port LISTEN_PORT
                         proxy listen port (default: 8080)
   -s, --socks           use as socks proxy (not http proxy) (default: False)
-  -a AUTH, --auth AUTH  set proxy authentication (format: 'username:pass') (default: )
+  -a, --auth AUTH       set proxy authentication (format: 'username:pass') (default: )
   -i, --insecure        insecure ssl (default: False)
   -d, --debug           Debug Log. (default: False)
-  -p PROCESSES, --tor-processes PROCESSES
+  -p, --tor-processes PROCESSES
                         number of tor processes in the cycle (default: 2)
-  -c CMD, --tor-cmd CMD
-                        tor cmd (executable path + arguments) (default: tor)
-  -e CONFIG, --tor-config CONFIG
+  -c, --tor-cmd CMD     tor cmd (executable path + arguments) (default: tor)
+  -e, --tor-config CONFIG
                         tor extended json configuration (default: {})
-  -t TIMEOUT, --tor-timeout TIMEOUT
+  -t, --tor-timeout TIMEOUT
                         timeout in seconds for starting a tor instance; 0 disables timeout (default: 90)
-  -r TRIES, --tor-tries TRIES
+  -r, --tor-tries TRIES
                         number tries to start a tor instance before it fails (default: 5)
+  --request-timeout REQUEST_TIMEOUT
+                        timeout in seconds for http requests; 0 disables timeout (default: 0)
   --on-count ON_COUNT   change ip every x requests (resources also counted) (default: 0)
   --on-string ON_STRING
                         change ip when string found in the response content (default: )
@@ -118,4 +163,5 @@ options:
   --on-rst              change ip when connection closed with tcp rst (default: False)
   --on-status-code [ON_STATUS_CODE ...]
                         change ip when one of the specified status codes is returned (default: [])
+  --on-timeout          change ip when request times out (default: False)
 ```
