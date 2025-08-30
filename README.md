@@ -92,9 +92,9 @@ The API requires authentication using a Bearer token. You can set the token in t
    ```
    **Note**: If `PYMULTITOR_TOKEN` is not set, PyMultiTor will automatically generate a random token for you.
 
-2. **Command Line**: Use the `--auth` parameter when starting PyMultiTor:
+2. **Command Line**: starting PyMultiTor:
    ```bash
-   pymultitor --auth "username:your-secret-token-here"
+   pymultitor"
    ```
 
 #### Endpoints
