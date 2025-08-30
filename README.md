@@ -94,7 +94,7 @@ The API requires authentication using a Bearer token. You can set the token in t
 
 2. **Command Line**: starting PyMultiTor:
    ```bash
-   pymultitor"
+   pymultitor
    ```
 
 #### Endpoints
